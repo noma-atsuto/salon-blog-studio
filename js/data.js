@@ -7,12 +7,8 @@
   const DEFAULTS = {
     area: '池袋',
 
-    // 共有画像フォルダ（Google ドライブ）。clientId は Google Cloud で作る「Webアプリ用クライアントID」（公開されても問題ない値）
-    drive: {
-      clientId: '',
-      rootFolderId: '1fxp-ECPTHG2UjGXpU7n00r6ATXIkNeAR',
-      rootName: '店舗写真（スタッフ共用）'
-    },
+    // 共有画像フォルダ。配る仕組み（gas/Code.gs）のURLは公開せず、管理画面か配布用の設定ファイルで入れる
+    drive: { endpoint: '', rootName: '店舗写真（スタッフ共用）' },
 
     seasons: {
       spring: {

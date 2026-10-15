@@ -39,113 +39,82 @@
   };
 
   // 共有フォルダ（Google ドライブ）
-  // 会社の Google アカウントでログインし、読み取り専用の権限（drive.readonly）で一覧と写真を取得します。
-  // ログインの鍵（アクセストークン）はページを開いている間だけメモリに置き、保存しません。
-  const SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
-  const API = 'https://www.googleapis.com/drive/v3/files';
-  const FOLDER = 'application/vnd.google-apps.folder';
+  // オーナーのドライブに置いた「配る仕組み」（gas/Code.gs）に、合言葉をつけて問い合わせます。
+  // スタッフは Google ログイン不要。配る範囲は「店舗写真（スタッフ共用）」フォルダの中だけです。
+  function b64ToBlob(data, mime) {
+    const bin = atob(data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime || 'image/jpeg' });
+  }
+  const ERRORS = {
+    bad_key: '合言葉が違います',
+    locked: '合言葉のまちがいが続いたため、10分ほど止まっています。少し待ってからお試しください',
+    not_configured: '配る仕組みに合言葉が設定されていません（管理者に連絡してください）',
+    forbidden: 'このフォルダの外の写真は見られません',
+    not_found: '写真またはフォルダが見つかりません',
+    too_large: '写真が大きすぎます（15MBまで）',
+    network: '共有フォルダにつながりませんでした。通信状態か、配る仕組みのURLを確認してください'
+  };
 
-  const GoogleDriveSource = {
+  const DriveRelaySource = {
     id: 'gdrive',
     label: '共有フォルダ',
-    config: { clientId: '', rootFolderId: '', rootName: '共有フォルダ' },
-    token: null, expiresAt: 0, tokenClient: null,
-    get ready() { return Boolean(this.config.clientId && this.config.rootFolderId); },
-    get signedIn() { return Boolean(this.token && Date.now() < this.expiresAt); },
+    config: { endpoint: '', rootName: '共有フォルダ' },
+    passcode: '',
+    thumbs: new Map(),
+    get ready() { return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(this.config.endpoint || ''); },
+    get unlocked() { return Boolean(this.passcode); },
+    configure(cfg) { this.config = Object.assign({}, this.config, cfg); },
+    setPasscode(v) { this.passcode = v || ''; },
 
-    configure(cfg) {
-      const changed = cfg.clientId !== this.config.clientId;
-      this.config = Object.assign({}, this.config, cfg);
-      if (changed) { this.tokenClient = null; this.token = null; }
+    async call(body) {
+      let res;
+      try {
+        // text/plain にすると、ブラウザの事前確認なしで送れる（Apps Script 向けのよくある方法）
+        res = await fetch(this.config.endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ key: this.passcode }, body)) });
+      } catch (e) { throw Object.assign(new Error(ERRORS.network), { code: 'network' }); }
+      let data;
+      try { data = await res.json(); } catch (e) { throw Object.assign(new Error(ERRORS.network), { code: 'network' }); }
+      if (!data.ok) throw Object.assign(new Error(ERRORS[data.error] || `読み込みに失敗しました（${data.error}）`), { code: data.error });
+      return data;
     },
 
-    loadGis() {
-      if (root.google && root.google.accounts && root.google.accounts.oauth2) return Promise.resolve();
-      if (this._gis) return this._gis;
-      this._gis = new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://accounts.google.com/gsi/client';
-        s.async = true;
-        s.onload = () => resolve();
-        s.onerror = () => { this._gis = null; reject(new Error('Google のログイン部品を読み込めませんでした')); };
-        document.head.appendChild(s);
-      });
-      return this._gis;
-    },
+    async check() { return this.call({ action: 'ping' }); },
 
-    async signIn() {
-      await this.loadGis();
-      return new Promise((resolve, reject) => {
-        if (!this.tokenClient) {
-          this.tokenClient = root.google.accounts.oauth2.initTokenClient({
-            client_id: this.config.clientId,
-            scope: SCOPE,
-            callback: () => {}
-          });
-        }
-        this.tokenClient.callback = (res) => {
-          if (res.error) { reject(new Error(res.error)); return; }
-          this.token = res.access_token;
-          this.expiresAt = Date.now() + (Number(res.expires_in) || 3600) * 1000 - 60000;
-          resolve();
-        };
-        this.tokenClient.error_callback = (err) => reject(new Error((err && err.type) || 'popup_closed'));
-        this.tokenClient.requestAccessToken({ prompt: this.token ? '' : 'select_account' });
-      });
-    },
-
-    signOut() {
-      if (this.token && root.google && root.google.accounts) root.google.accounts.oauth2.revoke(this.token, () => {});
-      this.token = null; this.expiresAt = 0;
-    },
-
-    async request(url) {
-      if (!this.signedIn) throw Object.assign(new Error('ログインが必要です'), { code: 401 });
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.token}` } });
-      if (res.status === 401) { this.token = null; throw Object.assign(new Error('ログインの期限が切れました'), { code: 401 }); }
-      if (res.status === 403 || res.status === 404) throw Object.assign(new Error('このフォルダを見る権限がありません'), { code: res.status });
-      if (!res.ok) throw Object.assign(new Error(`読み込みに失敗しました（${res.status}）`), { code: res.status });
-      return res;
-    },
-
-    // フォルダの中身（フォルダと画像）を取得
+    // フォルダの中身（フォルダと画像）
     async listFolder(folderId) {
-      const q = `'${folderId}' in parents and trashed = false and (mimeType = '${FOLDER}' or mimeType contains 'image/')`;
-      const fields = 'nextPageToken,files(id,name,mimeType,thumbnailLink,createdTime,imageMediaMetadata(time),lastModifyingUser(displayName),owners(displayName))';
-      const out = { folders: [], images: [] };
-      let pageToken = '';
-      do {
-        const params = new URLSearchParams({ q, fields, orderBy: 'folder,name', pageSize: '200', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' });
-        if (pageToken) params.set('pageToken', pageToken);
-        const data = await (await this.request(`${API}?${params}`)).json();
-        for (const f of data.files || []) {
-          if (f.mimeType === FOLDER) { out.folders.push({ id: f.id, name: f.name }); continue; }
-          const shot = f.imageMediaMetadata && f.imageMediaMetadata.time;
-          out.images.push({
-            fileId: f.id, id: `gdrive:${f.id}`, name: f.name,
-            thumb: f.thumbnailLink ? f.thumbnailLink.replace(/=s\d+$/, '=s400') : '',
-            // 撮影日（写真の情報 "2026:10:01 12:00:00" 形式）がなければ登録日
-            date: shot ? fmtDate(shot.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')) : fmtDate(f.createdTime),
-            dateLabel: shot ? '撮影日' : '登録日',
-            uploader: (f.owners && f.owners[0] && f.owners[0].displayName) || (f.lastModifyingUser && f.lastModifyingUser.displayName) || '—'
-          });
-        }
-        pageToken = data.nextPageToken || '';
-      } while (pageToken);
-      return out;
+      const data = await this.call({ action: 'list', folder: folderId || '' });
+      return {
+        folder: data.folder,
+        folders: data.folders,
+        images: data.images.map((f) => ({
+          fileId: f.id, id: `gdrive:${f.id}`, name: f.name, thumb: this.thumbs.get(f.id) || '',
+          date: fmtDate(f.created), dateLabel: '登録日', uploader: f.owner || '—'
+        }))
+      };
     },
 
-    // 選んだ写真の本体を取得し、ブラウザの中だけで使える形にする
+    // 小さな見本画像（1枚ずつ取りに行き、覚えておく）
+    async thumbnail(fileId) {
+      if (this.thumbs.has(fileId)) return this.thumbs.get(fileId);
+      const d = await this.call({ action: 'thumb', id: fileId });
+      const url = d.data ? URL.createObjectURL(b64ToBlob(d.data, d.mime)) : '';
+      this.thumbs.set(fileId, url);
+      return url;
+    },
+
+    // 選んだ写真の本体（ブラウザの中だけで使う）
     async fetchImage(img) {
       if (registry.has(img.id)) return registry.get(img.id);
-      const blob = await (await this.request(`${API}/${img.fileId}?alt=media&supportsAllDrives=true`)).blob();
-      return register(Object.assign({}, img, { url: URL.createObjectURL(blob) }));
+      const d = await this.call({ action: 'image', id: img.fileId });
+      return register(Object.assign({}, img, { url: URL.createObjectURL(b64ToBlob(d.data, d.mime)) }));
     }
   };
 
   const api = {
-    sources: [LocalSource, GoogleDriveSource],
-    byId: { local: LocalSource, gdrive: GoogleDriveSource },
+    sources: [LocalSource, DriveRelaySource],
+    byId: { local: LocalSource, gdrive: DriveRelaySource },
     get(id) { return registry.get(id) || null; }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

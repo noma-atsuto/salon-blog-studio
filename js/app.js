@@ -100,11 +100,13 @@
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
   }
-  // ---- 共有フォルダ（Google ドライブ） ----
+  // ---- 共有フォルダ（Google ドライブ。オーナーの「配る仕組み」経由） ----
   const drive = { path: [], list: null, loading: false, error: '', picking: '' };
+  SRC.byId.gdrive.setPasscode(store.get('sbs.drivePass', ''));
   function thumbCard(it, selected, extra) {
+    const src = it.thumb || it.url;
     return `<div class="thumb ${selected ? 'on' : ''}">
-      ${it.thumb || it.url ? `<img src="${esc(it.thumb || it.url)}" alt="${esc(it.name)}" data-img referrerpolicy="no-referrer" loading="lazy">` : '<div class="img-error">プレビューなし</div>'}
+      ${src ? `<img src="${esc(src)}" alt="${esc(it.name)}" data-img>` : `<div class="img-error" data-thumb="${esc(it.fileId || '')}">読み込み中…</div>`}
       <div class="meta"><b>${esc(it.name)}</b>${esc(it.dateLabel)} ${esc(it.date)}<br>投稿者 ${esc(it.uploader)}</div>
       ${extra}
     </div>`;
@@ -113,22 +115,25 @@
     const G = SRC.byId.gdrive;
     const body = $('sourceBody');
     if (!G.ready) {
-      body.innerHTML = '<p class="note">共有フォルダはまだ設定されていません。管理画面の「共有画像フォルダ」でクライアントIDを設定してください。今は「この端末から」で写真を選べます。</p>';
+      body.innerHTML = `<div style="margin-top:12px">
+        <p class="note" style="margin:0 0 8px">共有フォルダを使うには、管理者から届いた「設定ファイル」を読み込みます（最初の1回だけ）。それまでは「この端末から」で写真を選べます。</p>
+        <label class="btn btn-primary">設定ファイルを読み込む<input type="file" id="configFile" accept=".json" hidden></label></div>`;
       return;
     }
-    if (!G.signedIn) {
+    if (!G.unlocked) {
       body.innerHTML = `<div style="margin-top:12px">
-        <button type="button" class="btn btn-primary" id="btnDriveIn">Google でログインして写真を見る</button>
-        <p class="note">会社の Google アカウントでログインします。写真は見るだけで、変更や削除はしません。</p>
+        <label class="note" for="drivePass" style="display:block;margin:0 0 6px">共有フォルダの合言葉</label>
+        <div class="actions"><input id="drivePass" class="input" type="password" autocomplete="off" style="max-width:220px" placeholder="合言葉">
+        <button type="button" class="btn btn-primary" id="btnDriveIn">開く</button></div>
+        <p class="note">合言葉はこの端末に記憶されます。わからないときは管理者に確認してください。</p>
         ${drive.error ? `<ul class="warn" style="margin-top:8px"><li>${esc(drive.error)}</li></ul>` : ''}</div>`;
       return;
     }
-    if (!drive.path.length) drive.path = [{ id: G.config.rootFolderId, name: G.config.rootName }];
     const crumbs = drive.path.map((p, i) => i === drive.path.length - 1
       ? `<b>${esc(p.name)}</b>` : `<button type="button" class="link" data-crumb="${i}">${esc(p.name)}</button>`).join(' <span class="sep">/</span> ');
     let inner = '';
     if (drive.loading) inner = '<p class="empty">読み込み中…</p>';
-    else if (drive.error) inner = `<ul class="warn" style="margin-top:10px"><li>${esc(drive.error)}</li></ul>`;
+    else if (drive.error) inner = `<ul class="warn" style="margin-top:10px"><li>${esc(drive.error)}</li></ul><button type="button" class="btn btn-sm" id="btnDriveRetry">もう一度読み込む</button>`;
     else if (drive.list) {
       const { folders, images } = drive.list;
       inner = (folders.length ? `<div class="folders">${folders.map((f) => `<button type="button" class="chip" data-folder="${esc(f.id)}" data-folder-name="${esc(f.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>${esc(f.name)}</button>`).join('')}</div>` : '')
@@ -136,24 +141,50 @@
           `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`)).join('')}</div>`
           : folders.length ? '' : '<p class="empty">このフォルダには写真がありません。</p>');
     }
-    body.innerHTML = `<div class="crumbs">${crumbs}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">ログアウト</button></div>${inner}
+    body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button></div>${inner}
       <p class="note">お客様の顔が写った写真は、利用の許可があるものだけを使ってください。</p>`;
     body.querySelectorAll('img[data-img]').forEach((img) => {
       img.addEventListener('error', () => { img.outerHTML = '<div class="img-error">プレビューなし</div>'; });
     });
-    if (!drive.list && !drive.loading && !drive.error) openFolder();
+    if (!drive.list && !drive.loading && !drive.error) { openFolder(); return; }
+    loadThumbs();
+  }
+  // 見本画像は4枚ずつ取りに行く（配る仕組みに負担をかけすぎない）
+  let thumbRun = 0;
+  async function loadThumbs() {
+    const run = ++thumbRun;
+    const todo = drive.list ? drive.list.images.filter((x) => !x.thumb) : [];
+    const worker = async () => {
+      while (todo.length && run === thumbRun) {
+        const it = todo.shift();
+        try { it.thumb = await SRC.byId.gdrive.thumbnail(it.fileId); } catch (e) { it.thumb = ''; }
+        const el = document.querySelector(`[data-thumb="${CSS.escape(it.fileId)}"]`);
+        if (el && run === thumbRun) el.outerHTML = it.thumb ? `<img src="${esc(it.thumb)}" alt="${esc(it.name)}">` : '<div class="img-error">プレビューなし</div>';
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  }
+  function driveError(e) {
+    if (e.code === 'bad_key') { SRC.byId.gdrive.setPasscode(''); store.set('sbs.drivePass', ''); }
+    return e.message;
   }
   async function openFolder() {
     const G = SRC.byId.gdrive;
     drive.loading = true; drive.error = ''; renderDrive();
-    try { drive.list = await G.listFolder(drive.path[drive.path.length - 1].id); }
-    catch (e) { drive.list = null; drive.error = e.code === 401 ? 'ログインの期限が切れました。もう一度ログインしてください' : e.message; }
+    try {
+      const cur = drive.path[drive.path.length - 1];
+      drive.list = await G.listFolder(cur ? cur.id : '');
+      if (!drive.path.length) drive.path = [{ id: drive.list.folder.id, name: drive.list.folder.name }];
+    } catch (e) { drive.list = null; drive.error = driveError(e); }
     drive.loading = false; renderDrive();
   }
-  async function driveSignIn() {
-    drive.error = '';
-    try { await SRC.byId.gdrive.signIn(); drive.list = null; drive.path = []; }
-    catch (e) { drive.error = /popup_closed|access_denied/.test(e.message) ? 'ログインが完了しませんでした。もう一度お試しください' : `ログインできませんでした（${e.message}）`; }
+  async function driveUnlock() {
+    const v = $('drivePass').value.trim();
+    if (!v) { toast('合言葉を入れてください'); return; }
+    const G = SRC.byId.gdrive;
+    G.setPasscode(v); drive.error = '';
+    try { await G.check(); store.set('sbs.drivePass', v); drive.list = null; drive.path = []; }
+    catch (e) { G.setPasscode(''); drive.error = e.message; }
     renderDrive();
   }
   async function drivePick(id) {
@@ -164,7 +195,7 @@
       await SRC.byId.gdrive.fetchImage(img);
       state.imageId = id; update();
       toast('写真を選びました');
-    } catch (e) { toast(e.code === 401 ? 'ログインの期限が切れました。もう一度ログインしてください' : e.message); }
+    } catch (e) { toast(driveError(e)); }
     drive.picking = ''; renderDrive();
   }
 
@@ -437,8 +468,8 @@
         </div>
         <p class="note">個人情報を減らすため、表示名はニックネームなどでもかまいません。</p>
         <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
-          <b style="font-size:14px">ビューティーメリットから取り込む</b>
-          <p class="note">tools/import_beauty_merit.py で作った <code>private/staff.json</code>（または1行に1名のテキスト・CSV）を選びます。名前はこの端末のブラウザにだけ保存されます。</p>
+          <b style="font-size:14px">スタッフを取り込む（ビューティーメリット・設定ファイル）</b>
+          <p class="note">tools/import_beauty_merit.py で作った <code>private/staff.json</code>、配布用の設定ファイル、または1行に1名のテキスト・CSV を選びます。名前はこの端末のブラウザにだけ保存されます。</p>
           <div class="actions" style="margin-top:8px">
             <label class="btn btn-sm">ファイルを選ぶ<input type="file" id="staffFile" accept=".json,.csv,.txt" hidden></label>
             <label class="chip"><input type="checkbox" id="staffReplace" checked>今の一覧を置き換える</label>
@@ -475,14 +506,16 @@
       </div>
 
       <div class="card"><h3>共有画像フォルダ（Google ドライブ）</h3>
-        <p class="note">Google Cloud で作った「Webアプリ用のクライアントID」と、写真フォルダのID（フォルダのURLの最後の部分）を入れます。</p>
+        <p class="note">Google Apps Script で公開した「配る仕組み」のURL（https://script.google.com/macros/s/…/exec）を入れます。このURLは公開のアプリには入らず、この端末にだけ保存されます。</p>
         <div class="grid2" style="margin-top:8px">
-          <div class="field"><label for="adClientId">クライアントID</label><input class="input" id="adClientId" value="${esc(settings.drive.clientId)}" placeholder="xxxx.apps.googleusercontent.com"></div>
-          <div class="field"><label for="adFolderId">フォルダID</label><input class="input" id="adFolderId" value="${esc(settings.drive.rootFolderId)}"></div>
+          <div class="field" style="grid-column:1/-1"><label for="adEndpoint">配る仕組みのURL</label><input class="input" id="adEndpoint" value="${esc(settings.drive.endpoint)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
           <div class="field" style="grid-column:1/-1"><label for="adFolderName">フォルダの表示名</label><input class="input" id="adFolderName" value="${esc(settings.drive.rootName)}"></div>
         </div>
-        <div class="actions" style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="btnSaveDrive">保存</button></div>
-        <p class="note">状態：${SRC.byId.gdrive.ready ? '設定済み' : '未設定（クライアントIDが必要です）'}</p>
+        <div class="actions" style="margin-top:8px">
+          <button type="button" class="btn btn-primary btn-sm" id="btnSaveDrive">保存</button>
+          <button type="button" class="btn btn-sm" id="btnExportConfig">スタッフ配布用の設定ファイルを書き出す</button>
+        </div>
+        <p class="note">状態：${SRC.byId.gdrive.ready ? '設定済み' : '未設定'}。設定ファイルには、スタッフ一覧と配る仕組みのURLが入ります（合言葉は入りません）。LINE などで個別に渡してください。</p>
       </div>
 
       <div class="card"><h3>そのほか</h3>
@@ -527,8 +560,9 @@
     if (d.dpick) { drivePick(d.dpick); return; }
     if (d.folder) { drive.path.push({ id: d.folder, name: d.folderName }); drive.list = null; openFolder(); return; }
     if (d.crumb) { drive.path = drive.path.slice(0, Number(d.crumb) + 1); drive.list = null; openFolder(); return; }
-    if (t.id === 'btnDriveIn') { driveSignIn(); return; }
-    if (t.id === 'btnDriveOut') { SRC.byId.gdrive.signOut(); drive.list = null; drive.path = []; renderDrive(); toast('ログアウトしました'); return; }
+    if (t.id === 'btnDriveIn') { driveUnlock(); return; }
+    if (t.id === 'btnDriveRetry') { drive.error = ''; drive.list = null; renderDrive(); return; }
+    if (t.id === 'btnDriveOut') { SRC.byId.gdrive.setPasscode(''); store.set('sbs.drivePass', ''); drive.list = null; drive.path = []; renderDrive(); toast('この端末の合言葉を消しました'); return; }
     if (d.season) { state.season = d.season; state.tone = settings.seasons[d.season].defaultTone; renderSeasons(); renderColors(); regen(); return; }
     if (d.tone) { state.tone = d.tone; renderSeasons(); renderColors(); regen(); return; }
     if (d.genre) {
@@ -638,12 +672,19 @@
       afterSettingsChange('サブタイトルを保存しました'); return;
     }
     if (t.id === 'btnSaveDrive') {
-      const clientId = $('adClientId').value.trim(), rootFolderId = $('adFolderId').value.trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, '');
-      if (clientId && !/\.apps\.googleusercontent\.com$/.test(clientId)) { toast('クライアントIDの形が違います（…apps.googleusercontent.com で終わります）'); return; }
-      if (!rootFolderId) { toast('フォルダIDを入れてください'); return; }
-      saveOverride((o) => { o.drive = { clientId, rootFolderId, rootName: $('adFolderName').value.trim() || '共有フォルダ' }; });
+      const endpoint = $('adEndpoint').value.trim();
+      if (endpoint && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(endpoint)) { toast('URLの形が違います（https://script.google.com/macros/s/…/exec）'); return; }
+      saveOverride((o) => { o.drive = { endpoint, rootName: $('adFolderName').value.trim() || '共有フォルダ' }; });
       drive.list = null; drive.path = [];
       afterSettingsChange('共有フォルダの設定を保存しました'); return;
+    }
+    if (t.id === 'btnExportConfig') {
+      const data = { app: 'salon-blog-studio', staff: settings.staff, drive: settings.drive };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      a.download = 'salon-blog-studio-設定.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('設定ファイルを書き出しました'); return;
     }
     if (t.id === 'btnSaveForbidden') {
       const list = linesOf('adForbidden');
@@ -685,6 +726,7 @@
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.id === 'staffSelect') { state.staffId = t.value; update(); return; }
+    if (t.id === 'configFile' && t.files[0]) { importStaff(t.files[0], true); t.value = ''; return; }
     if (t.id === 'staffFile' && t.files[0]) { importStaff(t.files[0], $('staffReplace').checked); t.value = ''; return; }
     if (t.id === 'adColorSub') { adminSel.colorSub = t.value; renderAdmin(); return; }
     if (t.id === 'adCatchSeason') { adminSel.catchSeason = t.value; renderAdmin(); return; }
@@ -694,6 +736,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'pin') $('btnPin').click();
+    if (e.key === 'Enter' && e.target.id === 'drivePass') $('btnDriveIn').click();
   });
 
   // スタッフの取り込み（JSON: {staff:[{name}]} か [{name}] か ["名前"]／テキスト・CSV: 1行目の列を名前とする）
@@ -735,8 +778,14 @@
         base.push({ id: `st${Date.now()}_${i}`, name, store, genres: [] });
         added += 1;
       });
-      saveOverride((o) => { o.staff = base; });
-      afterSettingsChange(`${added}名を取り込みました`);
+      // 配布用の設定ファイルなら、共有フォルダの設定も一緒に取り込む
+      let driveCfg = null;
+      if (/\.json$/i.test(file.name)) {
+        try { const d = JSON.parse(String(reader.result)); if (d && d.drive && d.drive.endpoint) driveCfg = { endpoint: String(d.drive.endpoint), rootName: String(d.drive.rootName || '共有フォルダ') }; } catch (e) { driveCfg = null; }
+      }
+      saveOverride((o) => { o.staff = base; if (driveCfg) o.drive = driveCfg; });
+      drive.list = null; drive.path = [];
+      afterSettingsChange(`${added}名を取り込みました${driveCfg ? '（共有フォルダの設定も読み込みました）' : ''}`);
     };
     reader.onerror = () => toast('ファイルを読み込めませんでした');
     reader.readAsText(file, 'utf-8');
