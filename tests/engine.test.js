@@ -179,5 +179,7 @@ test('人物の後ろの背景に、季節の景色の指示が入る（4季節�
     const p = E.buildPrompt(D, { ...base, season: s }, texts, null);
     assert.ok(p.includes('人物の後ろ（左側）の背景：' + D.seasons[s].scene), s);
     assert.ok(p.includes(`ひと目で${D.seasons[s].label}だと分かる景色`), s);
+    assert.ok(p.includes('時間帯は昼') && D.seasons[s].light.includes('昼'), s);
+    assert.ok(!/夕方のような|夜の|街の灯り|イルミネーション/.test(D.seasons[s].scene + D.seasons[s].light), s);
   }
 });
