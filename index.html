@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SALON BLOG STUDIO</title>
+  <meta name="sbs-version" content="202610152238">
   <meta name="description" content="ブログ用アイキャッチ画像のプロンプトを作るツール">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202610152235">
+  <link rel="stylesheet" href="css/style.css?v=202610152238">
 </head>
 <body>
   <!-- スマホ用の上部バー（☰でサイドバーを開く） -->
@@ -28,6 +29,7 @@
       <a href="#posts" data-view="posts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span>投稿数</span></a>
       <a href="#admin" data-view="admin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>管理</span></a>
     </nav>
+    <button type="button" class="side-update" id="btnUpdate">最新版に更新</button>
     <p class="side-note">IKEBUKURO MEN'S SALON</p>
   </aside>
 
@@ -154,11 +156,13 @@
 
   </div>
 
+  <div class="update-bar" id="updateBar" hidden>新しい版があります<button type="button" class="btn btn-sm" id="btnUpdateNow">更新する</button></div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/data.js?v=202610152235"></script>
-  <script src="js/engine.js?v=202610152235"></script>
-  <script src="js/sources.js?v=202610152235"></script>
-  <script src="js/app.js?v=202610152235"></script>
+  <script src="js/data.js?v=202610152238"></script>
+  <script src="js/engine.js?v=202610152238"></script>
+  <script src="js/sources.js?v=202610152238"></script>
+  <script src="js/app.js?v=202610152238"></script>
 </body>
 </html>

@@ -841,10 +841,30 @@
 
   document.addEventListener('click', (e) => { if (e.target.id === 'scrim') setMenu(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+  // ---- 新しい版の確認（公開後、ブラウザが古い版を表示し続けないように） ----
+  const CURRENT_VERSION = (document.querySelector('meta[name="sbs-version"]') || {}).content || '';
+  function reloadLatest(v) {
+    location.replace(`${location.pathname}?v=${encodeURIComponent(v || Date.now())}${location.hash}`);
+  }
+  async function checkVersion() {
+    try {
+      const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const { version } = await res.json();
+      if (version && CURRENT_VERSION && version !== CURRENT_VERSION) {
+        $('updateBar').hidden = false;
+        $('btnUpdateNow').onclick = () => reloadLatest(version);
+      }
+    } catch (e) { /* 通信できないときは何もしない */ }
+  }
+  $('btnUpdate').addEventListener('click', () => reloadLatest());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+
   window.addEventListener('hashchange', showView);
 
   // ---- 起動 ----
   renderAll();
   regen();
   showView();
+  checkVersion();
 })();
