@@ -27,7 +27,8 @@
    python3 tools/import_beauty_merit.py "（beauty_merit_report のフォルダ）/cache"
    ```
 3. 管理画面 →「ビューティーメリットから取り込む」→ そのファイルを選ぶ
-- `private/` フォルダは GitHub に上げない設定です。実名をアプリの中身に書き込まないでください。
+- `private/` フォルダは GitHub に上げない設定です。
+- 投稿者の初期一覧（`js/data.js` の staff）には、オーナーの判断で現在のスタッフ10名を公開で入れています。一覧から外す人は `private/exclude.txt` に書き、data.js からも消してください。
 
 ## 共有フォルダ（Google ドライブ）から写真を選ぶ
 スタッフは Google ログイン不要で、合言葉だけで「店舗写真（スタッフ共用）」の写真を選べます。

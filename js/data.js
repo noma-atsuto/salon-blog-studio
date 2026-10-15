@@ -271,11 +271,18 @@
       '効果を保証するような言葉や、誇大な表現を入れない'
     ],
 
-    // デモ用のサンプルスタッフ（実在の人物ではありません）
+    // 投稿者の初期一覧（ビューティーメリットから取り込み、オーナーの判断で公開）
     staff: [
-      { id: 'st1', name: 'スタイリストA', store: '池袋店', genres: ['color', 'perm'] },
-      { id: 'st2', name: 'スタイリストB', store: '池袋店', genres: ['perm'] },
-      { id: 'st3', name: 'スタイリストC', store: '池袋店', genres: ['cut', 'straight'] }
+      { id: 'bm1', name: '明星 智紀', store: '池袋店', genres: [] },
+      { id: 'bm2', name: '井上 虎汰郎', store: '池袋店', genres: [] },
+      { id: 'bm3', name: '陽星', store: '池袋店', genres: [] },
+      { id: 'bm4', name: '高階　涼介', store: '池袋店', genres: [] },
+      { id: 'bm5', name: '佐渡蒼', store: '池袋店', genres: [] },
+      { id: 'bm6', name: '野間 淳人', store: '池袋店', genres: [] },
+      { id: 'bm7', name: '藤田 孝太郎', store: '池袋店', genres: [] },
+      { id: 'bm8', name: '福村 陸斗', store: '池袋店', genres: [] },
+      { id: 'bm9', name: '鈴木　晴翔', store: '池袋店', genres: [] },
+      { id: 'bm10', name: '斎藤　純也', store: '池袋店', genres: [] }
     ]
   };
 

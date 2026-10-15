@@ -6,7 +6,7 @@ const E = require('../js/engine.js');
 
 const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 const TONES = ['cool', 'warm'];
-const base = { season: 'autumn', tone: 'warm', staffId: 'st1', genreId: 'color', subId: null, hairColor: 'auto', image: { id: 'local:test.jpg' } };
+const base = { season: 'autumn', tone: 'warm', staffId: 'bm1', genreId: 'color', subId: null, hairColor: 'auto', image: { id: 'local:test.jpg' } };
 const colorSubs = D.genres.find((g) => g.id === 'color').subs;
 
 test('辞書の文章とタイトルはすべて15文字以内', () => {
@@ -102,7 +102,7 @@ test('プロンプトに必要な情報がすべて入る', () => {
     '4:3', '1200×900', '45%', '55%',
     '「池袋」', '「メンズカラー」', texts.catch, texts.title, texts.subtitle,
     D.seasons.autumn.palettes.warm.title, D.seasons.autumn.palettes.warm.accent,
-    '髪色だけを、「モカブラウン」', '顔には絶対に重ねない', D.forbidden[0], 'スタイリストA', 'テイスト：暖色'
+    '髪色だけを、「モカブラウン」', '顔には絶対に重ねない', D.forbidden[0], D.staff[0].name, 'テイスト：暖色'
   ]) assert.ok(p.includes(must), `missing: ${must}`);
 });
 
@@ -182,4 +182,9 @@ test('人物の後ろの背景に、季節の景色の指示が入る（4季節�
     assert.ok(p.includes('時間帯は昼') && D.seasons[s].light.includes('昼'), s);
     assert.ok(!/夕方のような|夜の|街の灯り|イルミネーション/.test(D.seasons[s].scene + D.seasons[s].light), s);
   }
+});
+
+test('投稿者の初期一覧は10名', () => {
+  assert.equal(D.staff.length, 10);
+  assert.ok(D.staff.every((x) => x.id && x.name && x.store === '池袋店'));
 });
