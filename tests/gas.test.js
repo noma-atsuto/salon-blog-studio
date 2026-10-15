@@ -74,8 +74,10 @@ test('フォルダの外のファイル・フォルダは返さない', () => {
   assert.equal(call({ key: 'k', action: 'image', id: 'huge' }).error, 'too_large');
 });
 
-test('合言葉を20回まちがえると、正しい合言葉でも止まる', () => {
-  const call = load('k');
-  for (let i = 0; i < 20; i++) call({ key: 'x', action: 'ping' });
-  assert.equal(call({ key: 'k', action: 'ping' }).error, 'locked');
+test('合言葉を10回まちがえると、正しい合言葉でも止まる', () => {
+  const call = load('4831');
+  for (let i = 0; i < 9; i++) call({ key: '0000', action: 'ping' });
+  assert.ok(call({ key: '4831', action: 'ping' }).ok); // 9回までは止まらない
+  for (let i = 0; i < 1; i++) call({ key: 'x', action: 'ping' });
+  assert.equal(call({ key: '4831', action: 'ping' }).error, 'locked');
 });

@@ -4,12 +4,13 @@
  * オーナーの権限で動き、ROOT_ID のフォルダの中にある写真だけを、合言葉を知っている人に返します。
  * ・ドライブのほかのファイルは返しません（フォルダの中かどうかを毎回確かめます）
  * ・合言葉はこのファイルに書かず、「プロジェクトの設定 → スクリプト プロパティ」の PASSCODE に入れます
- * ・合言葉を10分間に20回まちがえると、10分間すべて止めます
+ * ・合言葉を1時間に10回まちがえると、1時間すべて止めます（4桁の合言葉でも当てられにくくするため）
  * ・写真の変更・削除はしません（読むだけ）
  */
 const ROOT_ID = '1fxp-ECPTHG2UjGXpU7n00r6ATXIkNeAR'; // 店舗写真（スタッフ共用）
 const MAX_BYTES = 15 * 1024 * 1024; // 1枚 15MB まで
-const MAX_FAILS = 20;
+const MAX_FAILS = 10;
+const LOCK_SECONDS = 3600;
 
 function doPost(e) {
   let req = {};
@@ -40,7 +41,7 @@ function checkKey_(key) {
   const fails = Number(cache.get('fails') || 0);
   if (fails >= MAX_FAILS) throw err_('locked');
   if (typeof key !== 'string' || key !== pass) {
-    cache.put('fails', String(fails + 1), 600);
+    cache.put('fails', String(fails + 1), LOCK_SECONDS);
     throw err_('bad_key');
   }
 }
