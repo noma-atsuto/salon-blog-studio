@@ -129,3 +129,16 @@ test('入力の確認：長すぎる文字・髪色の不一致・写真なし�
   assert.ok(w.some((x) => x.includes('一致していません')));
   assert.ok(w.some((x) => x.includes('写真')));
 });
+
+test('スタイルのタブに6種類があり、それぞれのスタイル名と指示になる', () => {
+  const st = D.genres.find((g) => g.id === 'style');
+  assert.deepEqual(st.subs.map((x) => x.label), ['マッシュ', 'センターパート', 'アップバング', '束感マッシュ', 'ショートマッシュ', 'スパイキーショート']);
+  assert.ok(st.subs[1].titles.includes('毛流れセンターパート') && st.subs[1].titles.includes('ツイストセンターパート') && st.subs[1].titles.includes('波巻きセンターパート'));
+  for (const sub of st.subs) {
+    const c = E.generateCandidates(D, { ...base, genreId: 'style', subId: sub.id, hairColor: 'keep' }, 0);
+    assert.ok(c.every((x) => sub.titles.includes(x.title)), sub.id);
+    assert.equal(c[0].category, `池袋 ${sub.category}`);
+    const p = E.buildPrompt(D, { ...base, genreId: 'style', subId: sub.id, hairColor: 'keep' }, c[0], null);
+    assert.ok(p.includes(`スタイル「${sub.label}」`) && p.includes(sub.desc) && p.includes('髪色は添付写真のまま'), sub.id);
+  }
+});

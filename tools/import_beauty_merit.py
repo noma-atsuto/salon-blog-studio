@@ -4,6 +4,7 @@
     python3 tools/import_beauty_merit.py "/path/to/beauty_merit_report 3/cache"
 
 出力: private/staff.json（GitHub には上げない。管理画面の「スタッフを取り込む」で読み込む）
+除外: private/exclude.txt に1行1名で書いた名前は取り込まない
 売上などの数字は読み込まず、名前だけを書き出します。
 """
 import glob
@@ -24,6 +25,15 @@ def split_store(raw):
         return raw.strip(), "池袋店"
     store = m.group(1).strip()
     return raw[: m.start()].strip(), store if store.endswith("店") else store + "店"
+
+
+def private_excludes():
+    """private/exclude.txt に書いた名前も外す（実名を公開のコードに書かないため）"""
+    path = os.path.join(os.path.dirname(__file__), "..", "private", "exclude.txt")
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {l.strip() for l in f if l.strip() and not l.startswith("#")}
 
 
 def staff_names(cache_dir):
@@ -51,8 +61,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, "staff.json")
     staff = []
+    excludes = private_excludes()
     for raw in names:
         name, store = split_store(raw)
+        if name in excludes or raw in excludes:
+            continue
         if name and all(x["name"] != name for x in staff):
             staff.append({"id": f"bm{len(staff) + 1}", "name": name, "store": store, "genres": []})
     with open(out, "w", encoding="utf-8") as f:

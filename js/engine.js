@@ -133,7 +133,8 @@
   function hairInstruction(settings, state, texts) {
     const g = findGenre(settings, state.genreId);
     const lines = [];
-    lines.push('・添付写真の髪型、長さ、毛流れ、分け目はそのまま維持してください。');
+    if (g.id === 'style') lines.push('・添付写真の髪の長さと質感を生かしながら、下のスタイルの特徴がはっきり伝わるように整えてください。');
+    else lines.push('・添付写真の髪型、長さ、毛流れ、分け目はそのまま維持してください。');
 
     let colorName = null;
     if (g.group === 'color') colorName = isNamedColor(state.hairColor) ? state.hairColor : texts.title;
@@ -158,7 +159,9 @@
       const sub = findSub(g, state.subId);
       lines.push(`・施術「${sub.label}」の仕上がりが伝わるようにしてください：${sub.desc}。`);
     } else if (g.group === 'cut') {
-      lines.push(`・施術「メンズカット」の仕上がりが伝わるようにしてください：${g.desc}。`);
+      const st = findSub(g, state.subId);
+      if (st) lines.push(`・スタイル「${st.label}」の特徴が伝わるようにしてください：${st.desc}。`);
+      else lines.push(`・施術「メンズカット」の仕上がりが伝わるようにしてください：${g.desc}。`);
     } else if (g.group === 'custom' && state.customNote) {
       lines.push(`・施術の補足：${state.customNote}`);
     }
