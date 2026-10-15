@@ -142,3 +142,22 @@ test('スタイルのタブに6種類があり、それぞれのスタイル名�
     assert.ok(p.includes(`スタイル「${sub.label}」`) && p.includes(sub.desc) && p.includes('髪色は添付写真のまま'), sub.id);
   }
 });
+
+test('ブログ用プロンプト：テーマ・ルール・店舗情報（一字一句）が入る', () => {
+  const texts = { category: '池袋 メンズパーマ', catch: '秋めく柔らかな毛流れ', title: '波巻きパーマ', subtitle: '束感でつくる大人の色気' };
+  const p = E.buildBlogPrompt(D, { ...base, genreId: 'perm', subId: 'nami', hairColor: 'keep', tone: 'cool' }, texts, D.staff[0]);
+  for (const must of [texts.title, texts.catch, texts.subtitle, '秋', D.toneStyles.cool, '1文ごとに改行', '絵文字', '「、」と「。」だけ', D.shopFooter, '平平'.slice(0, 0)]) assert.ok(p.includes(must), must);
+  assert.ok(p.trim().endsWith('----- 店舗情報ここまで -----'));
+  assert.ok(D.shopFooter.startsWith("AI TOKYO men's 池袋店") && D.shopFooter.endsWith('学割クーポン］'));
+});
+
+test('ブログ本文の確認と整え：記号・絵文字を消し、1文ごとに改行し、店舗情報を最後に正しく付ける', () => {
+  const raw = '秋のモカブラウン特集！\n\nモカブラウンの季節です！秋らしい色ですね😊\n「やわらかい」印象に♪ なります。\n\n\n\nぜひ。\nAI TOKYO men\'s 池袋店\nまちがった店舗情報';
+  const problems = E.checkBlogText(raw, D.shopFooter);
+  assert.ok(problems.some((x) => x.includes('記号')) && problems.some((x) => x.includes('2つ以上')) && problems.some((x) => x.includes('店舗情報')));
+  const fixed = E.cleanBlogText(raw, D.shopFooter);
+  assert.deepEqual(E.checkBlogText(fixed, D.shopFooter), []);
+  assert.ok(fixed.endsWith(D.shopFooter));
+  const body = fixed.slice(0, fixed.length - D.shopFooter.length).trim().split('\n');
+  assert.deepEqual(body, ['秋のモカブラウン特集', '', 'モカブラウンの季節です。', '秋らしい色ですね。', 'やわらかい印象に なります。', '', 'ぜひ。']);
+});

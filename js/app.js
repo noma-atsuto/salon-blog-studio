@@ -24,6 +24,7 @@
     const o = store.get('sbs.settings', {});
     if (o.staff) s.staff = o.staff;
     if (o.forbidden) s.forbidden = o.forbidden;
+    if (typeof o.shopFooter === 'string') s.shopFooter = o.shopFooter;
     if (o.drive) s.drive = Object.assign({}, s.drive, o.drive);
     if (o.subtitles) Object.assign(s.subtitles, o.subtitles);
     if (o.catches) for (const k of Object.keys(o.catches)) Object.assign(s.catches[k], o.catches[k]);
@@ -319,6 +320,7 @@
   function update() {
     renderPreview();
     $('promptText').textContent = currentPrompt();
+    $('blogPromptText').textContent = E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff());
     const w = E.validate(settings, engineState(), ui.texts);
     $('warnings').innerHTML = w.map((x) => `<li>${esc(x)}</li>`).join('');
     saveState();
@@ -505,6 +507,12 @@
         <div class="actions" style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="btnSaveForbidden">保存</button></div>
       </div>
 
+      <div class="card"><h3>ブログの店舗情報</h3>
+        <p class="note">ブログ本文の最後に、一字一句そのまま付ける文章です。</p>
+        <textarea class="input" id="adFooter" style="min-height:240px">${esc(settings.shopFooter)}</textarea>
+        <div class="actions" style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="btnSaveFooter">保存</button></div>
+      </div>
+
       <div class="card"><h3>共有画像フォルダ（Google ドライブ）</h3>
         <p class="note">Google Apps Script で公開した「配る仕組み」のURL（https://script.google.com/macros/s/…/exec）を入れます。このURLは公開のアプリには入らず、この端末にだけ保存されます。</p>
         <div class="grid2" style="margin-top:8px">
@@ -548,6 +556,14 @@
     window.scrollTo(0, 0);
   }
 
+  function renderBlogChecks() {
+    const v = $('blogInput').value;
+    const list = v.trim() ? E.checkBlogText(v, settings.shopFooter) : [];
+    $('blogChecks').innerHTML = v.trim()
+      ? (list.length ? list.map((x) => `<li>${esc(x)}</li>`).join('') : '<li class="ok">ルールどおりです（内容は公開前に必ず読んで確かめてください）</li>')
+      : '';
+  }
+
   function renderAll() { renderSource(); renderSeasons(); renderStaff(); renderGenres(); renderColors(); }
 
   // ---- 操作 ----
@@ -587,6 +603,29 @@
       addHistory(prompt);
       toast(currentImage() ? 'コピーしました。ChatGPT に写真を添付して貼り付けてください' : 'コピーしました（写真がまだ選ばれていません）');
       return;
+    }
+    if (t.id === 'btnBlogCopy') {
+      const ok = await copyText(E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff()));
+      toast(ok ? 'コピーしました。ChatGPT に貼り付けて送信してください' : 'コピーできませんでした。「中身を見る」から手で選んでコピーしてください');
+      return;
+    }
+    if (t.id === 'btnBlogFix') {
+      const v = $('blogInput').value;
+      if (!v.trim()) { toast('先に本文を貼り付けてください'); return; }
+      $('blogInput').value = E.cleanBlogText(v, settings.shopFooter);
+      renderBlogChecks(); toast('ルールに合わせて整えました。内容を読んで確かめてください'); return;
+    }
+    if (t.id === 'btnBlogOutCopy') {
+      const v = $('blogInput').value;
+      if (!v.trim()) { toast('先に本文を貼り付けてください'); return; }
+      toast((await copyText(v)) ? '本文をコピーしました' : 'コピーできませんでした');
+      return;
+    }
+    if (t.id === 'btnSaveFooter') {
+      const v = $('adFooter').value.replace(/\r\n?/g, '\n').trim();
+      if (!v) { toast('店舗情報を入れてください'); return; }
+      saveOverride((o) => { o.shopFooter = v; });
+      afterSettingsChange('店舗情報を保存しました'); return;
     }
     if (t.id === 'btnDownload') {
       const img = currentImage();
@@ -714,6 +753,7 @@
       if (t.dataset.custom === 'customTitle') { ui.texts.title = state.customTitle || 'メンズスタイル'; $('f-title').value = ui.texts.title; updateCounts(); }
       renderCands(); update(); return;
     }
+    if (t.id === 'blogInput') { renderBlogChecks(); return; }
     if (t.dataset.crop) {
       const img = currentImage(); if (!img) return;
       const c = ui.crops[img.id] || (ui.crops[img.id] = { x: 50, y: 50, z: 100 });

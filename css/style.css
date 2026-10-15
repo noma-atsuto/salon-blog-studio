@@ -156,6 +156,8 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .warn { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 4px; }
 .warn li { font-size: 13px; color: var(--warn); background: #FBF1EC; border-radius: 6px; padding: 6px 10px; }
 .warn li::before { content: '! '; font-weight: 700; }
+.warn li.ok { color: #3F6B4A; background: #EEF5EF; }
+.warn li.ok::before { content: ''; }
 .howto { margin: 14px 0 0; padding-left: 1.3em; color: var(--ink-2); font-size: 13.5px; }
 .howto li { margin: 2px 0; }
 .prompt-box { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }

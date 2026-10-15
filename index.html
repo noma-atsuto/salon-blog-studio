@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202610152159">
+  <link rel="stylesheet" href="css/style.css?v=202610152209">
 </head>
 <body>
   <!-- スマホ用の上部バー（☰でサイドバーを開く） -->
@@ -103,6 +103,28 @@
             <pre id="promptText"></pre>
           </details>
         </div>
+
+        <div class="step">
+          <h2><span class="num">09</span>ブログ本文を作る</h2>
+          <p class="note" style="margin:0 0 12px">上で選んだ季節・テイスト・施術・タイトルに合わせた、ブログ本文づくりのプロンプトです。本文は1文ごとに改行、絵文字なし、記号は「、」「。」だけ。最後に店舗情報が付きます。</p>
+          <div class="actions">
+            <button class="btn btn-primary" id="btnBlogCopy" type="button">ブログ用プロンプトをコピー</button>
+            <a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a>
+          </div>
+          <details class="prompt-box">
+            <summary>ブログ用プロンプトの中身を見る</summary>
+            <pre id="blogPromptText"></pre>
+          </details>
+          <div class="prompt-box">
+            <label class="note" for="blogInput" style="display:block;margin:0 0 6px">ChatGPT が書いた本文をここに貼ると、ルールどおりか確かめて整えます</label>
+            <textarea class="input" id="blogInput" placeholder="ここに本文を貼り付け"></textarea>
+            <ul class="warn" id="blogChecks" style="margin-top:8px"></ul>
+            <div class="actions">
+              <button class="btn" id="btnBlogFix" type="button">ルールに合わせて整える</button>
+              <button class="btn btn-primary" id="btnBlogOutCopy" type="button">本文をコピー</button>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   </main>
@@ -134,9 +156,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/data.js?v=202610152159"></script>
-  <script src="js/engine.js?v=202610152159"></script>
-  <script src="js/sources.js?v=202610152159"></script>
-  <script src="js/app.js?v=202610152159"></script>
+  <script src="js/data.js?v=202610152209"></script>
+  <script src="js/engine.js?v=202610152209"></script>
+  <script src="js/sources.js?v=202610152209"></script>
+  <script src="js/app.js?v=202610152209"></script>
 </body>
 </html>

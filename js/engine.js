@@ -235,6 +235,120 @@
     ].join('\n');
   }
 
+  // ---- ブログ本文 ----
+  // 施術・髪色の説明（ブログのテーマ用）
+  function themeLines(settings, state, texts) {
+    const g = findGenre(settings, state.genreId);
+    const sub = findSub(g, state.subId);
+    const lines = [];
+    const genreName = g.id === 'custom' ? (state.customLabel || 'カスタム') : (sub ? `${g.label}（${sub.label}）` : g.label);
+    lines.push(`・施術ジャンル：${genreName}`);
+    if (sub && sub.desc) lines.push(`・施術・スタイルの特徴：${sub.desc}`);
+    else if (g.desc) lines.push(`・施術の特徴：${g.desc}`);
+    if (g.id === 'custom' && state.customNote) lines.push(`・補足：${state.customNote}`);
+    const colorName = g.group === 'color' ? (isNamedColor(state.hairColor) ? state.hairColor : texts.title)
+      : (isNamedColor(state.hairColor) ? state.hairColor : null);
+    const c = colorName ? findHairColor(settings, colorName) : null;
+    if (colorName) lines.push(`・髪色：${colorName}${c ? `（${c.desc}）` : ''}`);
+    return lines;
+  }
+
+  // ChatGPT に貼り付ける、ブログ本文づくりの依頼文
+  function buildBlogPrompt(settings, state, texts, staff) {
+    const season = settings.seasons[state.season];
+    const b = settings.blog || { minChars: 600, maxChars: 900, titleMax: 30 };
+    return [
+      '# ホットペッパービューティーのブログ本文の作成依頼',
+      '',
+      `${settings.area}のメンズ美容室のスタイリストとして、お客様に向けたブログの本文を書いてください。`,
+      '',
+      '## 1. 今回のテーマ',
+      `・メインタイトル：${texts.title}`,
+      `・キャッチコピー：${texts.catch}`,
+      `・サブタイトル：${texts.subtitle}`,
+      `・カテゴリー：${texts.category}`,
+      `・季節：${season.label}`,
+      `・テイスト：${settings.toneStyles[state.tone] || ''}`,
+      ...themeLines(settings, state, texts),
+      `・書き手：${staff ? staff.name : '担当スタイリスト'}（本文で名乗る必要はありません）`,
+      '',
+      '## 2. 読む人',
+      '・20〜30代の男性。髪型に興味はあるが、美容室にくわしくない人も含む。',
+      '・専門用語は使いすぎず、使うときはやさしく言いかえる。',
+      '',
+      '## 3. 構成（この順番で）',
+      `1. ${season.label}の季節感にふれながら、読む人の気持ちに寄りそう導入`,
+      '2. 今回のスタイル・施術・髪色の紹介',
+      '3. 特徴と、おすすめする理由',
+      '4. どんな人に似合うか、どんな悩みの人に合うか',
+      '5. 自宅でのスタイリングや、きれいに保つコツ',
+      '6. 押しつけない、来店のお誘い',
+      '',
+      '## 4. 書き方のルール（必ず守る）',
+      '・1文ごとに改行する。1行に2つ以上の文を書かない。',
+      '・まとまりの区切りには、空行を1行だけ入れる。',
+      '・絵文字、顔文字、記号は使わない。文の中で使ってよい記号は「、」と「。」だけ。',
+      '・使わない記号の例：！　？　♪　★　☆　※　・　「」　（）　【】　〜　…　#　■',
+      '・カタカナの長音「ー」は使ってよい。',
+      '・見出しや箇条書きは使わず、すべて文章で書く。',
+      `・本文は${b.minChars}〜${b.maxChars}文字くらい。`,
+      `・言葉選びはテイスト（${settings.tones[state.tone] || ''}）に合わせ、季節感は自然に入れる。`,
+      '・効果を保証する表現や、大げさな表現は使わない（例：必ず、絶対、誰でも、治る、ダメージゼロ）。',
+      '・ここに書いていない事実（料金、キャンペーン、日付、実績の数字など）は書かない。',
+      '・ほかのお店や人を下げる表現は使わない。',
+      '',
+      '## 5. 出力の形',
+      `・1行目：ブログのタイトル（「${texts.title}」を入れて${b.titleMax}文字以内。記号は使わない）`,
+      '・2行目：空行',
+      '・3行目から：本文',
+      '・本文のあとに空行を1行入れ、次の店舗情報を一字一句そのまま最後に付ける（店舗情報の中の記号や改行は変えない）。',
+      '・店舗情報のあとには何も書かない。前置きや説明の文も書かない。',
+      '',
+      '----- 店舗情報ここから -----',
+      settings.shopFooter || '',
+      '----- 店舗情報ここまで -----'
+    ].join('\n');
+  }
+
+  // 本文で使ってよい文字：文字・数字・空白・「、」「。」・長音「ー」
+  const BLOG_ALLOWED = /[\p{L}\p{N}\s、。ー]/u;
+  function splitFooter(text, footer) {
+    const t = String(text || '').replace(/\r\n?/g, '\n');
+    const f = String(footer || '').trim();
+    const i = f ? t.lastIndexOf(f.split('\n')[0]) : -1;
+    return i >= 0 ? { body: t.slice(0, i), footer: t.slice(i).trim() } : { body: t, footer: '' };
+  }
+
+  // 生成された本文がルールどおりか調べる
+  function checkBlogText(text, footer) {
+    const { body, footer: f } = splitFooter(text, footer);
+    const problems = [];
+    const bad = [...new Set([...body].filter((ch) => !BLOG_ALLOWED.test(ch)))];
+    if (bad.length) problems.push(`使えない記号・絵文字があります：${bad.slice(0, 12).join(' ')}`);
+    const multi = body.split('\n').filter((l) => /[。！？!?]\s*\S/.test(l));
+    if (multi.length) problems.push(`1行に2つ以上の文がある行が${multi.length}か所あります`);
+    if (!f || f !== String(footer || '').trim()) problems.push('最後の店舗情報が、元の文章と一字一句同じになっていません');
+    return problems;
+  }
+
+  // ルールに合わせて整える（記号を消し、1文ごとに改行し、店舗情報を正しいものに付け直す）
+  function cleanBlogText(text, footer) {
+    const { body } = splitFooter(text, footer);
+    const lines = [];
+    for (const raw of body.split('\n')) {
+      let l = raw.replace(/[！？!?]+/g, '。');
+      l = [...l].filter((ch) => BLOG_ALLOWED.test(ch)).join('').replace(/[ \t　]+/g, (m) => m[0]).trim();
+      if (!l) { lines.push(''); continue; }
+      // 1行目はタイトル。分けず、終わりの「。」も付けない
+      if (!lines.some((x) => x)) { lines.push(l.replace(/。+$/, '')); continue; }
+      // 本文は1文ごとに改行し、文の終わりに「。」を付ける
+      const parts = l.replace(/。+/g, '。').split(/(?<=。)/).map((x) => x.trim()).filter(Boolean);
+      lines.push(...parts.map((x) => (x.endsWith('。') ? x : `${x}。`)));
+    }
+    const out = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    return `${out}\n\n${String(footer || '').trim()}`;
+  }
+
   // 文字と背景の見やすさ（コントラスト比。4.5以上が目安）
   function luminance(hex) {
     const v = hex.replace('#', '');
@@ -249,7 +363,7 @@
 
   const api = {
     MAX_CHARS, charCount, findGenre, findSub, findHairColor, colorsFor, paletteOf, categoryText, titleCandidates,
-    generateCandidates, validate, buildPrompt, contrastRatio
+    generateCandidates, validate, buildPrompt, buildBlogPrompt, checkBlogText, cleanBlogText, contrastRatio
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SBS_ENGINE = api;
