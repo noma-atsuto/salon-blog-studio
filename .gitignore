@@ -1,0 +1,4 @@
+.DS_Store
+.claude/settings.local.json
+# スタッフ名など、公開しない情報
+private/

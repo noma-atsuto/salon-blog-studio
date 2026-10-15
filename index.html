@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SALON BLOG STUDIO</title>
+  <meta name="description" content="ブログ用アイキャッチ画像のプロンプトを作るツール">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- スマホ用の上部バー（☰でサイドバーを開く） -->
+  <header class="mobilebar">
+    <button type="button" class="menu-btn" id="btnMenu" aria-label="メニューを開く" aria-controls="sidebar" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a class="brand" href="#create">SALON BLOG STUDIO</a>
+  </header>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="sidebar" id="sidebar" aria-label="メニュー">
+    <a class="brand" href="#create">SALON<br>BLOG STUDIO</a>
+    <nav class="side-nav">
+      <a href="#create" data-view="create"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>作成</span></a>
+      <a href="#history" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>履歴</span></a>
+      <a href="#posts" data-view="posts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span>投稿数</span></a>
+      <a href="#admin" data-view="admin"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>管理</span></a>
+    </nav>
+    <p class="side-note">IKEBUKURO MEN'S SALON</p>
+  </aside>
+
+  <div class="content">
+  <!-- 作成画面 -->
+  <main id="view-create" class="view">
+    <div class="layout">
+      <!-- 左：設定 -->
+      <section class="panel" aria-label="設定">
+        <div class="step">
+          <h2><span class="num">01</span>写真を選ぶ</h2>
+          <div class="seg" id="sourceTabs"></div>
+          <div id="sourceBody"></div>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">02</span>季節とテイスト</h2>
+          <div class="seg seg-4" id="seasonTabs"></div>
+          <div class="subseg"><div class="label">テキストのテイスト（季節を選ぶと自動で切り替わります）</div>
+            <div class="seg" id="toneTabs"></div></div>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">03</span>投稿者</h2>
+          <select id="staffSelect" class="input"></select>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">04</span>施術ジャンル</h2>
+          <div class="seg seg-wrap" id="genreTabs"></div>
+          <div id="genreSub"></div>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">05</span>髪色</h2>
+          <div class="chips" id="colorChips"></div>
+        </div>
+      </section>
+
+      <!-- 右：文章・プレビュー・プロンプト -->
+      <section class="panel panel-right" aria-label="プレビューとプロンプト">
+        <div class="step">
+          <div class="step-head">
+            <h2><span class="num">06</span>文章を選ぶ</h2>
+            <button class="btn btn-ghost" id="btnMore" type="button">別案を生成</button>
+          </div>
+          <div class="cands" id="cands"></div>
+          <div class="fields" id="fields"></div>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">07</span>完成イメージ</h2>
+          <div id="preview"></div>
+          <div class="crop" id="crop"></div>
+          <p class="note">これは配置を確かめるための目安です。ChatGPT の仕上がりと完全には一致しません。</p>
+        </div>
+
+        <div class="step">
+          <h2><span class="num">08</span>プロンプトをコピーして ChatGPT へ</h2>
+          <ul class="warn" id="warnings"></ul>
+          <div class="actions">
+            <button class="btn btn-primary" id="btnCopy" type="button">プロンプトをコピー</button>
+            <button class="btn" id="btnDownload" type="button">写真をダウンロード</button>
+            <a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a>
+          </div>
+          <ol class="howto">
+            <li>「プロンプトをコピー」を押す</li>
+            <li>自分の ChatGPT を開き、<b>選んだ写真を添付</b>する（写真は文字のコピーでは送れません）</li>
+            <li>入力欄に貼り付けて送信する</li>
+          </ol>
+          <details class="prompt-box">
+            <summary>プロンプトの中身を見る</summary>
+            <pre id="promptText"></pre>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 履歴画面 -->
+  <main id="view-history" class="view" hidden>
+    <div class="narrow">
+      <h1 class="page-title">履歴</h1>
+      <p class="note">この端末のブラウザに保存されています（最新100件）。写真そのものは保存されません。</p>
+      <div id="historyList"></div>
+    </div>
+  </main>
+
+  <!-- 投稿数 -->
+  <main id="view-posts" class="view" hidden>
+    <div class="narrow">
+      <h1 class="page-title">スタッフの投稿数</h1>
+      <p class="note">「プロンプトをコピー」した回数を、投稿数として数えています（この端末の記録のみ）。</p>
+      <div id="postsBody"></div>
+    </div>
+  </main>
+
+  <!-- 管理画面 -->
+  <main id="view-admin" class="view" hidden>
+    <div class="narrow" id="adminBody"></div>
+  </main>
+
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/sources.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
