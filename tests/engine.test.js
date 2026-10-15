@@ -172,3 +172,12 @@ test('画像の文字デザイン：タイトルは2行、カテゴリーは2つ
   const p = E.buildPrompt(D, { ...base, hairColor: 'ミルクブラウン' }, texts, null);
   for (const must of ['1枚の写真として画面全体を自然につなげる', '約55%', '約45%', '「池袋」', '「メンズカラー」', '1行目「ミルク」、2行目「ブラウン」', '季節の字「秋」', '「モテカラー」だけアクセント色', '細い横線を2本', D.seasons.autumn.decor, D.seasons.autumn.scene]) assert.ok(p.includes(must), must);
 });
+
+test('人物の後ろの背景に、季節の景色の指示が入る（4季節とも）', () => {
+  const texts = { category: '池袋 メンズカラー', catch: 'a', title: 'b', subtitle: 'c' };
+  for (const s of SEASONS) {
+    const p = E.buildPrompt(D, { ...base, season: s }, texts, null);
+    assert.ok(p.includes('人物の後ろ（左側）の背景：' + D.seasons[s].scene), s);
+    assert.ok(p.includes(`ひと目で${D.seasons[s].label}だと分かる景色`), s);
+  }
+});
