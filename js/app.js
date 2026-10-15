@@ -291,22 +291,28 @@
     const p = E.paletteOf(settings, state);
     const img = currentImage();
     const crop = (img && ui.crops[img.id]) || { x: 50, y: 50, z: 100 };
-    const len = Math.max(E.charCount(ui.texts.title), 1);
-    const size = Math.max(3.4, Math.min(6.4, 42 / len));
+    const lines = E.titleLines(ui.texts.title);
+    const longest = Math.max(1, ...lines.map((l) => E.charCount(l)));
+    const size = Math.max(4, Math.min(9.5, 40 / longest));
+    const cp = E.categoryParts(ui.texts.category);
+    const sp = E.subtitleParts(ui.texts.subtitle);
+    const sLabel = settings.seasons[state.season].label;
+    const catchHtml = esc(ui.texts.catch).replace(sLabel, `<span class="big">${esc(sLabel)}</span>`);
     $('preview').innerHTML = `
-      <div class="pv" style="background:linear-gradient(135deg, ${p.bg} 0%, ${p.bg} 45%, ${p.bgSub} 100%);color:${p.text}">
+      <div class="pv" style="background:${p.bg};color:${p.text};--accent:${p.accent};--band:${p.band}">
         <div class="pv-photo">${img
           ? `<img src="${img.url}" alt="選んだ写真" style="object-position:${crop.x}% ${crop.y}%;transform:scale(${crop.z / 100});transform-origin:${crop.x}% ${crop.y}%">`
           : '<div class="ph">01 で写真を選ぶと<br>ここに表示されます</div>'}</div>
+        <div class="pv-haze" style="background:linear-gradient(90deg, transparent 0%, ${p.bg}cc 22%, ${p.bg} 38%, ${p.bgSub} 100%)"></div>
         <div class="pv-text">
-          <span class="pv-band" style="background:${p.band};color:${p.bandText}">${esc(ui.texts.category)}</span>
-          <p class="pv-catch">${esc(ui.texts.catch)}</p>
-          <h3 class="pv-title" style="color:${p.title};font-size:${size}cqw">${esc(ui.texts.title)}</h3>
-          <div class="pv-line short" style="background:${p.accent}"></div>
-          <p class="pv-sub">${esc(ui.texts.subtitle)}</p>
-          <span class="pv-season" style="color:${p.title}">${settings.seasons[state.season].en}</span>
+          <div class="pv-dline"></div>
+          <div class="pv-cat">${cp.area ? `<span class="a" style="background:${p.band};color:${p.bandText}">${esc(cp.area)}</span>` : ''}<span class="b" style="color:${p.title}">${esc(cp.label)}</span></div>
+          <p class="pv-catch" style="color:${p.title}">${catchHtml}</p>
+          <h3 class="pv-title" style="font-size:${size}cqw;background-image:linear-gradient(180deg, ${p.title} 0%, ${p.title} 45%, ${p.accent} 100%)">${lines.map(esc).join('<br>')}</h3>
+          <div class="pv-line"></div>
+          <p class="pv-sub" style="color:${p.text}">${esc(sp.before)}${sp.accent ? `<span style="color:${p.accent}">${esc(sp.accent)}</span>` : ''}</p>
+          <div class="pv-line"></div>
         </div>
-        <div class="pv-frame" style="border-color:${p.accent}"></div>
       </div>`;
     const imgEl = $('preview').querySelector('img');
     if (imgEl) imgEl.addEventListener('error', () => { imgEl.outerHTML = '<div class="ph">写真を読み込めませんでした</div>'; });

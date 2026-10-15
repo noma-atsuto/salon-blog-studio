@@ -100,7 +100,7 @@ test('プロンプトに必要な情報がすべて入る', () => {
   for (const must of [
     'このプロンプトと一緒に添付した人物写真を参照画像として使用してください。',
     '4:3', '1200×900', '45%', '55%',
-    texts.category, texts.catch, texts.title, texts.subtitle,
+    '「池袋」', '「メンズカラー」', texts.catch, texts.title, texts.subtitle,
     D.seasons.autumn.palettes.warm.title, D.seasons.autumn.palettes.warm.accent,
     '髪色だけを、「モカブラウン」', '顔には絶対に重ねない', D.forbidden[0], 'スタイリストA', 'テイスト：暖色'
   ]) assert.ok(p.includes(must), `missing: ${must}`);
@@ -160,4 +160,15 @@ test('ブログ本文の確認と整え：記号・絵文字を消し、1文ご�
   assert.ok(fixed.endsWith(D.shopFooter));
   const body = fixed.slice(0, fixed.length - D.shopFooter.length).trim().split('\n');
   assert.deepEqual(body, ['秋のモカブラウン特集', '', 'モカブラウンの季節です。', '秋らしい色ですね。', 'やわらかい印象に なります。', '', 'ぜひ。']);
+});
+
+test('画像の文字デザイン：タイトルは2行、カテゴリーは2つの箱、サブタイトルの最後の言葉を強調', () => {
+  assert.deepEqual(E.titleLines('ミルクブラウン'), ['ミルク', 'ブラウン']);
+  assert.deepEqual(E.titleLines('グレージュ'), ['グレージュ']);
+  assert.deepEqual(E.subtitleParts('大人のモテカラー'), { before: '大人の', accent: 'モテカラー' });
+  assert.deepEqual(E.subtitleParts('朝のセットを手軽に'), { before: '朝のセットを手軽に', accent: '' });
+  assert.deepEqual(E.categoryParts('池袋 メンズカラー'), { area: '池袋', label: 'メンズカラー' });
+  const texts = { category: '池袋 メンズカラー', catch: '秋の抜け感をつくる', title: 'ミルクブラウン', subtitle: '大人のモテカラー' };
+  const p = E.buildPrompt(D, { ...base, hairColor: 'ミルクブラウン' }, texts, null);
+  for (const must of ['1枚の写真として画面全体を自然につなげる', '約55%', '約45%', '「池袋」', '「メンズカラー」', '1行目「ミルク」、2行目「ブラウン」', '季節の字「秋」', '「モテカラー」だけアクセント色', '細い横線を2本', D.seasons.autumn.decor, D.seasons.autumn.scene]) assert.ok(p.includes(must), must);
 });

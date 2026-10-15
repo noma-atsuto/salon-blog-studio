@@ -169,6 +169,30 @@
     return lines.join('\n');
   }
 
+  // ---- 画像の文字デザイン ----
+  // メインタイトルを2行に分ける位置（例：ミルクブラウン → ミルク／ブラウン）
+  const TITLE_TAILS = ['センターパート', 'スパイラル', 'ストレート', 'ハイライト', 'グレージュ', 'ブラウン', 'ベージュ', 'アッシュ', 'ブラック', 'マッシュ', 'ショート', 'バング', 'パーマ', 'グレー', 'カラー'];
+  function titleLines(title) {
+    const t = String(title || '');
+    for (const tail of TITLE_TAILS) {
+      if (t.endsWith(tail) && charCount(t) - charCount(tail) >= 2) return [t.slice(0, t.length - tail.length), tail];
+    }
+    return [t];
+  }
+  // サブタイトルの最後のカタカナの言葉をアクセント色にする（例：大人のモテカラー → モテカラー）
+  function subtitleParts(subtitle) {
+    const t = String(subtitle || '');
+    const m = t.match(/[ァ-ヶー]{2,}$/);
+    if (!m || m.index === 0) return { before: t, accent: '' };
+    return { before: t.slice(0, m.index), accent: m[0] };
+  }
+  // カテゴリーを「地名」と「ジャンル」の2つの箱に分ける（例：池袋｜メンズカラー）
+  function categoryParts(category) {
+    const t = String(category || '').trim();
+    const i = t.search(/[ 　]/);
+    return i > 0 ? { area: t.slice(0, i), label: t.slice(i).trim() } : { area: '', label: t };
+  }
+
   // ChatGPT に貼り付ける完成プロンプト
   function buildPrompt(settings, state, texts, staff) {
     const season = settings.seasons[state.season];
@@ -176,18 +200,25 @@
     const g = findGenre(settings, state.genreId);
     const sub = findSub(g, state.subId);
     const genreName = g.id === 'custom' ? (state.customLabel || 'カスタム') : (sub ? `${g.label}（${sub.label}）` : g.label);
+    const tl = titleLines(texts.title);
+    const sp = subtitleParts(texts.subtitle);
+    const cp = categoryParts(texts.category);
+    const seasonChar = String(texts.catch || '').includes(season.label) ? season.label : '';
+    const haze = season.background[state.tone] || season.background[season.defaultTone];
 
     return [
       '# 美容室ブログ用アイキャッチ画像の作成依頼',
       '',
       'このプロンプトと一緒に添付した人物写真を参照画像として使用してください。',
-      'ホットペッパービューティーのブログに掲載する、上品なファッション誌風のアイキャッチ画像を1枚作成してください。',
+      'ホットペッパービューティーのブログに掲載する、ファッション誌の表紙のような上品なアイキャッチ画像を1枚作成してください。',
       '',
-      '## 1. 画像の仕様',
+      '## 1. 画像の仕様と構図',
       '・横長 4:3（目標 1200×900px）。',
-      '・左側 約45% に人物、右側 約55% に文字を配置する、余白を生かした構図。',
-      '・人物は顔を大きく配置し、髪の質感がはっきり分かる高精細な写真にしてください。',
-      '・右側の文字エリアには細い罫線をあしらい、落ち着いた雑誌の誌面のように整えてください。',
+      '・写真と文字を左右で区切らず、1枚の写真として画面全体を自然につなげる。',
+      '・人物は左側 約55% に、胸から上を大きく配置する。顔がはっきり見えるよう、顔の高さは画面の3分の1ほど。少し斜めを向き、視線はカメラへ。',
+      `・背景は人物の後ろから右側まで一続き：${season.scene}。`,
+      `・右側 約45% は文字のための場所。背景をやわらかくぼかし、${haze}にかすませて、文字が読みやすくなるようにする。`,
+      '・髪の質感、毛束、毛先の動きがはっきり分かる、高精細な写真にする。',
       '',
       '## 2. 人物について（いちばん大切）',
       '・添付写真の人物の顔立ち、輪郭、目元、鼻、口、眼鏡、アクセサリーは、できる限りそのまま維持してください。',
@@ -198,34 +229,42 @@
       hairInstruction(settings, state, texts),
       '',
       `## 4. 季節の演出（${season.label}）`,
-      `・背景：${season.background[state.tone] || season.background[season.defaultTone]}。`,
       `・光：${season.light}。`,
-      `・装飾：${season.decor}。`,
-      '・季節感は上品に、控えめに表現してください。',
+      `・季節の飾り：${season.decor}。`,
+      '・飾りは画面のまわりだけに置き、人物の顔と文字には重ねない。',
       `・全体の色のテイスト：${settings.toneStyles[state.tone] || ''}。`,
       '',
-      '## 5. 画像に入れる文字（一字一句この通りに）',
-      `・カテゴリー帯（小さく、右側上部）：「${texts.category}」`,
-      `・キャッチコピー（小さめ）：「${texts.catch}」`,
-      `・メインタイトル（いちばん大きく）：「${texts.title}」`,
-      `・サブタイトル（タイトルの下）：「${texts.subtitle}」`,
-      '・上の4つ以外の文字は入れないでください。',
-      '・日本語の文字は、誤字・脱字・崩れた文字がないよう正確に描いてください。',
-      '・文字はすべて右側の文字エリアに置き、人物の顔には絶対に重ねないでください。',
+      '## 5. 文字のデザイン（右側の文字エリアに、上から順に中央そろえで配置）',
+      '※ 文字は下の指定のとおり一字一句正確に描き、ほかの文字は入れない。誤字・脱字・崩れた文字がないようにする。',
+      '1. いちばん上に、細い横線を2本平行に引く。',
+      cp.area
+        ? `2. カテゴリーの箱：左右に並んだ1つの横長の箱。左の小さめの箱は ${p.band} で塗りつぶし、白い太い明朝体で「${cp.area}」。右の箱は白地に ${p.band} の細い枠線で、濃い色の明朝体で「${cp.label}」。`
+        : `2. カテゴリーの箱：白地に ${p.band} の細い枠線の横長の箱に、濃い色の明朝体で「${cp.label}」。`,
+      `3. キャッチコピー「${texts.catch}」：大きめの、筆で書いたような勢いのある、やや斜めの明朝体。${seasonChar ? `季節の字「${seasonChar}」だけひと回り大きくする。` : ''}`,
+      tl.length > 1
+        ? `4. メインタイトル「${texts.title}」：画面でいちばん大きく、2行に分ける（1行目「${tl[0]}」、2行目「${tl[1]}」）。書道のような勢いのある極太の明朝体で、文字エリアの幅いっぱいに大きく。`
+        : `4. メインタイトル「${texts.title}」：画面でいちばん大きく、1行で。書道のような勢いのある極太の明朝体で、文字エリアの幅いっぱいに大きく。`,
+      `   色は ${p.title} を中心にした、濃い色から少し明るい色へのグラデーションに、ほんのりした光沢を加える。`,
+      '5. タイトルの下に、細い横線を1本。',
+      sp.accent
+        ? `6. サブタイトル「${texts.subtitle}」：太めの明朝体。「${sp.before}」は ${p.text}、「${sp.accent}」だけアクセント色 ${p.accent} にする。`
+        : `6. サブタイトル「${texts.subtitle}」：太めの明朝体、色は ${p.text}。`,
+      '7. サブタイトルの下に、細い横線を1本。',
+      '・文字はすべて右側の文字エリアに収め、人物の顔には絶対に重ねない。',
       '',
       '## 6. 配色（HEXコード）',
-      `・背景：${p.bg} → ${p.bgSub} のやわらかなグラデーション`,
-      `・メインタイトルの文字色：${p.title}`,
-      `・キャッチコピー・サブタイトルの文字色：${p.text}`,
-      `・アクセントライン（細い罫線）：${p.accent}`,
-      `・カテゴリー帯：背景 ${p.band}、文字 ${p.bandText}`,
-      '・髪色とデザインの色に統一感を持たせてください。',
+      `・文字エリアの背景：${p.bg} → ${p.bgSub} のやわらかなかすみ`,
+      `・メインタイトル：${p.title}（グラデーションの中心）`,
+      `・キャッチコピー・サブタイトル：${p.text}`,
+      `・アクセント色（サブタイトルの強調・罫線）：${p.accent}`,
+      `・カテゴリーの箱：塗りつぶし ${p.band}、文字 ${p.bandText}`,
+      '・髪色、服、季節の飾り、文字の色に統一感を持たせる。',
       '',
       '## 7. 禁止事項',
       ...settings.forbidden.map((f) => `・${f}`),
       '',
       '## 8. 仕上がりの品質',
-      '・プロのカメラマンが撮影したような、ピントの合った高精細な写真の質感。',
+      '・プロのカメラマンが撮影したような、ピントの合った高精細な写真の質感。背景と手前の飾りはやわらかくぼかす。',
       '・自然な肌の質感と、柔らかな自然光。',
       '・全体として、清潔感と高級感のある美容室らしい雰囲気。',
       '',
@@ -363,6 +402,7 @@
 
   const api = {
     MAX_CHARS, charCount, findGenre, findSub, findHairColor, colorsFor, paletteOf, categoryText, titleCandidates,
+    titleLines, subtitleParts, categoryParts,
     generateCandidates, validate, buildPrompt, buildBlogPrompt, checkBlogText, cleanBlogText, contrastRatio
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
