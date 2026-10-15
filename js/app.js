@@ -298,6 +298,8 @@
     const sp = E.subtitleParts(ui.texts.subtitle);
     const sLabel = settings.seasons[state.season].label;
     const catchHtml = esc(ui.texts.catch).replace(sLabel, `<span class="big">${esc(sLabel)}</span>`);
+    // キャッチ・サブタイトルは1行に収まるよう、長さに合わせて文字を小さくする（文字エリアの幅＝約40cqw）
+    const fit = (text, max) => Math.min(max, 38 / Math.max(1, E.charCount(text) + 0.5));
     $('preview').innerHTML = `
       <div class="pv" style="background:${p.bg};color:${p.text};--accent:${p.accent};--band:${p.band}">
         <div class="pv-photo">${img
@@ -307,10 +309,10 @@
         <div class="pv-text">
           <div class="pv-dline"></div>
           <div class="pv-cat">${cp.area ? `<span class="a" style="background:${p.band};color:${p.bandText}">${esc(cp.area)}</span>` : ''}<span class="b" style="color:${p.title}">${esc(cp.label)}</span></div>
-          <p class="pv-catch" style="color:${p.title}">${catchHtml}</p>
+          <p class="pv-catch" style="color:${p.title};font-size:${fit(ui.texts.catch, 3.3)}cqw">${catchHtml}</p>
           <h3 class="pv-title" style="font-size:${size}cqw;background-image:linear-gradient(180deg, ${p.title} 0%, ${p.title} 45%, ${p.accent} 100%)">${lines.map(esc).join('<br>')}</h3>
           <div class="pv-line"></div>
-          <p class="pv-sub" style="color:${p.text}">${esc(sp.before)}${sp.accent ? `<span style="color:${p.accent}">${esc(sp.accent)}</span>` : ''}</p>
+          <p class="pv-sub" style="color:${p.text};font-size:${fit(ui.texts.subtitle, 3.2)}cqw">${esc(sp.before)}${sp.accent ? `<span style="color:${p.accent}">${esc(sp.accent)}</span>` : ''}</p>
           <div class="pv-line"></div>
         </div>
       </div>`;
