@@ -188,3 +188,11 @@ test('投稿者の初期一覧は10名', () => {
   assert.equal(D.staff.length, 10);
   assert.ok(D.staff.every((x) => x.id && x.name && x.store === '池袋店'));
 });
+
+test('ブログ本文はコンパクト（350〜450文字・15〜20文）で、構成が6つ', () => {
+  const texts = { category: '池袋 メンズカラー', catch: 'a', title: 'ミルクブラウン', subtitle: 'b' };
+  const p = E.buildBlogPrompt(D, base, texts, null);
+  assert.ok(p.includes('350〜450文字') && p.includes('15〜20文') && p.includes('40文字以内'));
+  assert.ok(p.includes('おすすめのポイントを3つ') && p.includes('押しつけない、来店のお誘い'));
+  assert.ok(!p.includes('600〜900'));
+});
