@@ -319,6 +319,12 @@
   }
 
   // ---- 管理画面 ----
+  // 暗証番号はそのまま書かず、元に戻せない形（SHA-256）にして比べる
+  const DEFAULT_PIN_HASH = '76eab842599dadfb69a41e58ab87ebbb85effe559548541a5e390520bb0e1fa4';
+  async function pinHash(pin) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`sbs:${pin}`));
+    return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
   let adminOpen = false;
   try { adminOpen = sessionStorage.getItem('sbs.admin') === '1'; } catch (e) { adminOpen = false; }
   const adminSel = { colorSub: 'single', catchSeason: state.season, catchGroup: 'color', subGroup: 'color', editStaff: null };
@@ -491,7 +497,7 @@
 
     // 管理
     if (t.id === 'btnPin') {
-      if ($('pin').value === store.get('sbs.pin', '0000')) {
+      if ((await pinHash($('pin').value)) === store.get('sbs.pinHash', DEFAULT_PIN_HASH)) {
         adminOpen = true; try { sessionStorage.setItem('sbs.admin', '1'); } catch (err) { /* 保存できなくても開く */ }
         renderAdmin();
       } else toast('暗証番号が違います');
@@ -557,7 +563,7 @@
     if (t.id === 'btnPinChange') {
       const v = $('newPin').value.trim();
       if (v.length < 4) { toast('4文字以上にしてください'); return; }
-      store.set('sbs.pin', v); $('newPin').value = ''; toast('暗証番号を変更しました'); return;
+      store.set('sbs.pinHash', await pinHash(v)); $('newPin').value = ''; toast('この端末の暗証番号を変更しました'); return;
     }
     if (t.id === 'btnReset') {
       if (!confirm('辞書・カラー候補・禁止事項・スタッフを初期値に戻しますか？（履歴は残ります）')) return;
