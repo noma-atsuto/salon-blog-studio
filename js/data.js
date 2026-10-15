@@ -7,6 +7,13 @@
   const DEFAULTS = {
     area: '池袋',
 
+    // 共有画像フォルダ（Google ドライブ）。clientId は Google Cloud で作る「Webアプリ用クライアントID」（公開されても問題ない値）
+    drive: {
+      clientId: '',
+      rootFolderId: '1fxp-ECPTHG2UjGXpU7n00r6ATXIkNeAR',
+      rootName: '店舗写真（スタッフ共用）'
+    },
+
     seasons: {
       spring: {
         label: '春', en: 'SPRING',

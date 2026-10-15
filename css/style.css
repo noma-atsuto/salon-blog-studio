@@ -100,6 +100,13 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .img-error { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; font-size: 11px; color: var(--ink-3); background: var(--greige-soft); }
 .empty { color: var(--ink-3); font-size: 13px; padding: 10px 0 0; }
 
+/* 共有フォルダ */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.crumbs .sep { color: var(--ink-3); }
+.link { border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline; cursor: pointer; font-size: 13px; }
+.folders { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.folders svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
 /* ボタン */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;

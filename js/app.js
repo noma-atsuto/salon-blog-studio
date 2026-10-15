@@ -24,6 +24,7 @@
     const o = store.get('sbs.settings', {});
     if (o.staff) s.staff = o.staff;
     if (o.forbidden) s.forbidden = o.forbidden;
+    if (o.drive) s.drive = Object.assign({}, s.drive, o.drive);
     if (o.subtitles) Object.assign(s.subtitles, o.subtitles);
     if (o.catches) for (const k of Object.keys(o.catches)) Object.assign(s.catches[k], o.catches[k]);
     if (o.colors) {
@@ -37,8 +38,10 @@
     mutator(o);
     store.set('sbs.settings', o);
     settings = loadSettings();
+    SRC.byId.gdrive.configure(settings.drive);
   }
   let settings = loadSettings();
+  SRC.byId.gdrive.configure(settings.drive);
 
   // ---- 状態 ----
   function seasonOfMonth(m) { return m >= 3 && m <= 5 ? 'spring' : m >= 6 && m <= 8 ? 'summer' : m >= 9 && m <= 11 ? 'autumn' : 'winter'; }
@@ -57,7 +60,7 @@
     const { imageId, ...rest } = state;
     store.set('sbs.state', rest);
   }
-  function currentImage() { return state.imageId ? SRC.byId.local.get(state.imageId) : null; }
+  function currentImage() { return state.imageId ? SRC.get(state.imageId) : null; }
   function currentStaff() { return settings.staff.find((s) => s.id === state.staffId) || null; }
   function engineState() { const img = currentImage(); return Object.assign({}, state, { image: img ? { id: img.id, name: img.name } : null }); }
 
@@ -74,7 +77,7 @@
     $('sourceTabs').innerHTML = SRC.sources.map((s) =>
       `<button type="button" data-src="${s.id}" class="${state.source === s.id ? 'on' : ''}">${esc(s.label)}</button>`).join('');
     const src = SRC.byId[state.source] || SRC.byId.local;
-    if (!src.ready) { $('sourceBody').innerHTML = `<p class="note">${esc(src.note)}</p>`; return; }
+    if (src.id === 'gdrive') { renderDrive(); return; }
     const items = src.list();
     $('sourceBody').innerHTML = `
       <label class="drop" id="drop">
@@ -97,6 +100,74 @@
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
   }
+  // ---- 共有フォルダ（Google ドライブ） ----
+  const drive = { path: [], list: null, loading: false, error: '', picking: '' };
+  function thumbCard(it, selected, extra) {
+    return `<div class="thumb ${selected ? 'on' : ''}">
+      ${it.thumb || it.url ? `<img src="${esc(it.thumb || it.url)}" alt="${esc(it.name)}" data-img referrerpolicy="no-referrer" loading="lazy">` : '<div class="img-error">プレビューなし</div>'}
+      <div class="meta"><b>${esc(it.name)}</b>${esc(it.dateLabel)} ${esc(it.date)}<br>投稿者 ${esc(it.uploader)}</div>
+      ${extra}
+    </div>`;
+  }
+  function renderDrive() {
+    const G = SRC.byId.gdrive;
+    const body = $('sourceBody');
+    if (!G.ready) {
+      body.innerHTML = '<p class="note">共有フォルダはまだ設定されていません。管理画面の「共有画像フォルダ」でクライアントIDを設定してください。今は「この端末から」で写真を選べます。</p>';
+      return;
+    }
+    if (!G.signedIn) {
+      body.innerHTML = `<div style="margin-top:12px">
+        <button type="button" class="btn btn-primary" id="btnDriveIn">Google でログインして写真を見る</button>
+        <p class="note">会社の Google アカウントでログインします。写真は見るだけで、変更や削除はしません。</p>
+        ${drive.error ? `<ul class="warn" style="margin-top:8px"><li>${esc(drive.error)}</li></ul>` : ''}</div>`;
+      return;
+    }
+    if (!drive.path.length) drive.path = [{ id: G.config.rootFolderId, name: G.config.rootName }];
+    const crumbs = drive.path.map((p, i) => i === drive.path.length - 1
+      ? `<b>${esc(p.name)}</b>` : `<button type="button" class="link" data-crumb="${i}">${esc(p.name)}</button>`).join(' <span class="sep">/</span> ');
+    let inner = '';
+    if (drive.loading) inner = '<p class="empty">読み込み中…</p>';
+    else if (drive.error) inner = `<ul class="warn" style="margin-top:10px"><li>${esc(drive.error)}</li></ul>`;
+    else if (drive.list) {
+      const { folders, images } = drive.list;
+      inner = (folders.length ? `<div class="folders">${folders.map((f) => `<button type="button" class="chip" data-folder="${esc(f.id)}" data-folder-name="${esc(f.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>${esc(f.name)}</button>`).join('')}</div>` : '')
+        + (images.length ? `<div class="gallery">${images.map((it) => thumbCard(it, state.imageId === it.id,
+          `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`)).join('')}</div>`
+          : folders.length ? '' : '<p class="empty">このフォルダには写真がありません。</p>');
+    }
+    body.innerHTML = `<div class="crumbs">${crumbs}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">ログアウト</button></div>${inner}
+      <p class="note">お客様の顔が写った写真は、利用の許可があるものだけを使ってください。</p>`;
+    body.querySelectorAll('img[data-img]').forEach((img) => {
+      img.addEventListener('error', () => { img.outerHTML = '<div class="img-error">プレビューなし</div>'; });
+    });
+    if (!drive.list && !drive.loading && !drive.error) openFolder();
+  }
+  async function openFolder() {
+    const G = SRC.byId.gdrive;
+    drive.loading = true; drive.error = ''; renderDrive();
+    try { drive.list = await G.listFolder(drive.path[drive.path.length - 1].id); }
+    catch (e) { drive.list = null; drive.error = e.code === 401 ? 'ログインの期限が切れました。もう一度ログインしてください' : e.message; }
+    drive.loading = false; renderDrive();
+  }
+  async function driveSignIn() {
+    drive.error = '';
+    try { await SRC.byId.gdrive.signIn(); drive.list = null; drive.path = []; }
+    catch (e) { drive.error = /popup_closed|access_denied/.test(e.message) ? 'ログインが完了しませんでした。もう一度お試しください' : `ログインできませんでした（${e.message}）`; }
+    renderDrive();
+  }
+  async function drivePick(id) {
+    const img = drive.list && drive.list.images.find((x) => x.id === id);
+    if (!img) return;
+    drive.picking = id; renderDrive();
+    try {
+      await SRC.byId.gdrive.fetchImage(img);
+      state.imageId = id; update();
+      toast('写真を選びました');
+    } catch (e) { toast(e.code === 401 ? 'ログインの期限が切れました。もう一度ログインしてください' : e.message); }
+    drive.picking = ''; renderDrive();
+  }
+
   function addFiles(files) {
     const staff = currentStaff();
     const added = SRC.byId.local.add(files, staff ? staff.name : '');
@@ -403,8 +474,15 @@
         <div class="actions" style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="btnSaveForbidden">保存</button></div>
       </div>
 
-      <div class="card"><h3>共有画像フォルダ</h3>
-        <p class="note">未設定です。次の段階で Google ドライブと接続します（Google ログインで、許可されたフォルダだけを読み込みます）。</p>
+      <div class="card"><h3>共有画像フォルダ（Google ドライブ）</h3>
+        <p class="note">Google Cloud で作った「Webアプリ用のクライアントID」と、写真フォルダのID（フォルダのURLの最後の部分）を入れます。</p>
+        <div class="grid2" style="margin-top:8px">
+          <div class="field"><label for="adClientId">クライアントID</label><input class="input" id="adClientId" value="${esc(settings.drive.clientId)}" placeholder="xxxx.apps.googleusercontent.com"></div>
+          <div class="field"><label for="adFolderId">フォルダID</label><input class="input" id="adFolderId" value="${esc(settings.drive.rootFolderId)}"></div>
+          <div class="field" style="grid-column:1/-1"><label for="adFolderName">フォルダの表示名</label><input class="input" id="adFolderName" value="${esc(settings.drive.rootName)}"></div>
+        </div>
+        <div class="actions" style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="btnSaveDrive">保存</button></div>
+        <p class="note">状態：${SRC.byId.gdrive.ready ? '設定済み' : '未設定（クライアントIDが必要です）'}</p>
       </div>
 
       <div class="card"><h3>そのほか</h3>
@@ -446,6 +524,11 @@
     const d = t.dataset;
     if (d.src) { state.source = d.src; renderSource(); return; }
     if (d.pick) { state.imageId = d.pick; renderSource(); update(); return; }
+    if (d.dpick) { drivePick(d.dpick); return; }
+    if (d.folder) { drive.path.push({ id: d.folder, name: d.folderName }); drive.list = null; openFolder(); return; }
+    if (d.crumb) { drive.path = drive.path.slice(0, Number(d.crumb) + 1); drive.list = null; openFolder(); return; }
+    if (t.id === 'btnDriveIn') { driveSignIn(); return; }
+    if (t.id === 'btnDriveOut') { SRC.byId.gdrive.signOut(); drive.list = null; drive.path = []; renderDrive(); toast('ログアウトしました'); return; }
     if (d.season) { state.season = d.season; state.tone = settings.seasons[d.season].defaultTone; renderSeasons(); renderColors(); regen(); return; }
     if (d.tone) { state.tone = d.tone; renderSeasons(); renderColors(); regen(); return; }
     if (d.genre) {
@@ -486,7 +569,7 @@
       if (d.hCopy) { toast((await copyText(h.prompt)) ? 'コピーしました。ChatGPT に写真を添付して貼り付けてください' : 'コピーできませんでした'); return; }
       if (d.hDel) { store.set('sbs.history', list.filter((x) => x.id !== h.id)); renderHistory(); toast('削除しました'); return; }
       Object.assign(state, { season: h.season, tone: h.tone || settings.seasons[h.season].defaultTone, staffId: h.staffId, genreId: h.genreId, subId: h.subId, hairColor: h.hairColor, customLabel: h.customLabel || '', customTitle: h.customTitle || '', customNote: h.customNote || '' });
-      state.imageId = h.imageId && SRC.byId.local.get(h.imageId) ? h.imageId : null;
+      state.imageId = h.imageId && SRC.get(h.imageId) ? h.imageId : null;
       renderAll();
       ui.cands = E.generateCandidates(settings, engineState(), 0); ui.selected = -1; ui.texts = Object.assign({}, h.texts);
       renderCands(); renderFields(); update();
@@ -553,6 +636,14 @@
       const g = adminSel.subGroup;
       saveOverride((o) => { o.subtitles = Object.assign({}, o.subtitles, { [g]: list }); });
       afterSettingsChange('サブタイトルを保存しました'); return;
+    }
+    if (t.id === 'btnSaveDrive') {
+      const clientId = $('adClientId').value.trim(), rootFolderId = $('adFolderId').value.trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, '');
+      if (clientId && !/\.apps\.googleusercontent\.com$/.test(clientId)) { toast('クライアントIDの形が違います（…apps.googleusercontent.com で終わります）'); return; }
+      if (!rootFolderId) { toast('フォルダIDを入れてください'); return; }
+      saveOverride((o) => { o.drive = { clientId, rootFolderId, rootName: $('adFolderName').value.trim() || '共有フォルダ' }; });
+      drive.list = null; drive.path = [];
+      afterSettingsChange('共有フォルダの設定を保存しました'); return;
     }
     if (t.id === 'btnSaveForbidden') {
       const list = linesOf('adForbidden');
