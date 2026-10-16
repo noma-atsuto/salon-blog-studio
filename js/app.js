@@ -559,9 +559,10 @@
         </div>
         <div class="actions" style="margin-top:8px">
           <button type="button" class="btn btn-primary btn-sm" id="btnSaveDrive">保存</button>
-          <button type="button" class="btn btn-sm" id="btnExportConfig">スタッフ配布用の設定ファイルを書き出す</button>
+          <button type="button" class="btn btn-sm" id="btnSetupLink">スタッフ配布用の設定リンクをコピー</button>
+          <button type="button" class="btn btn-sm" id="btnExportConfig">設定ファイルを書き出す</button>
         </div>
-        <p class="note">状態：${SRC.byId.gdrive.ready ? '設定済み' : '未設定'}。設定ファイルには、スタッフ一覧と配る仕組みのURLが入ります（合言葉は入りません）。LINE などで個別に渡してください。</p>
+        <p class="note">状態：${SRC.byId.gdrive.ready ? '設定済み' : '未設定'}。設定リンク（または設定ファイル）には配る仕組みのURLが入ります（合言葉は入りません）。外部には出さず、LINE などで個別に渡してください。</p>
       </div>
 
       <div class="card"><h3>そのほか</h3>
@@ -755,6 +756,11 @@
       drive.list = null; drive.path = [];
       afterSettingsChange('共有フォルダの設定を保存しました'); return;
     }
+    if (t.id === 'btnSetupLink') {
+      if (!SRC.byId.gdrive.ready) { toast('先に配る仕組みのURLを保存してください'); return; }
+      toast((await copyText(setupLinkFor(settings.drive))) ? '設定リンクをコピーしました。LINE などでスタッフに個別に送ってください' : 'コピーできませんでした');
+      return;
+    }
     if (t.id === 'btnExportConfig') {
       const data = { app: 'salon-blog-studio', staff: settings.staff, drive: settings.drive };
       const a = document.createElement('a');
@@ -775,8 +781,10 @@
       store.set('sbs.pinHash', await pinHash(v)); $('newPin').value = ''; toast('この端末の暗証番号を変更しました'); return;
     }
     if (t.id === 'btnReset') {
-      if (!confirm('辞書・カラー候補・禁止事項・スタッフを初期値に戻しますか？（履歴は残ります）')) return;
-      store.set('sbs.settings', {}); settings = loadSettings();
+      if (!confirm('辞書・カラー候補・禁止事項・スタッフを初期値に戻しますか？（履歴と共有フォルダの設定は残ります）')) return;
+      // 共有フォルダの設定は消さずに残す
+      const keep = store.get('sbs.settings', {}).drive;
+      store.set('sbs.settings', keep ? { drive: keep } : {}); settings = loadSettings(); SRC.byId.gdrive.configure(settings.drive);
       afterSettingsChange('初期値に戻しました'); return;
     }
   });
@@ -873,6 +881,27 @@
 
   document.addEventListener('click', (e) => { if (e.target.id === 'scrim') setMenu(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
+  // ---- 設定リンク（#setup=… を開くと、共有フォルダの設定を入れる。リンクは LINE などで個別に送る） ----
+  function applySetupLink() {
+    const m = location.hash.match(/^#setup=([A-Za-z0-9_-]+)/);
+    if (!m) return false;
+    history.replaceState(null, '', location.pathname + location.search + '#create');
+    try {
+      const json = decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))));
+      const d = JSON.parse(json);
+      if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(d.endpoint || '')) throw new Error('bad');
+      saveOverride((o) => { o.drive = { endpoint: d.endpoint, rootName: String(d.rootName || '共有フォルダ') }; });
+      state.source = 'gdrive';
+      setTimeout(() => toast('共有フォルダの設定を入れました。合言葉を入れて開いてください'), 300);
+    } catch (e) { setTimeout(() => toast('設定リンクが正しくありません'), 300); }
+    return true;
+  }
+  // 管理画面：設定リンクを作る
+  function setupLinkFor(drive) {
+    const raw = btoa(unescape(encodeURIComponent(JSON.stringify({ endpoint: drive.endpoint, rootName: drive.rootName }))));
+    return `${location.origin}${location.pathname}#setup=${raw.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+  }
+
   // ---- 新しい版の確認（公開後、ブラウザが古い版を表示し続けないように） ----
   const CURRENT_VERSION = (document.querySelector('meta[name="sbs-version"]') || {}).content || '';
   function reloadLatest(v) {
@@ -895,6 +924,7 @@
   window.addEventListener('hashchange', showView);
 
   // ---- 起動 ----
+  applySetupLink();
   renderAll();
   regen();
   showView();
