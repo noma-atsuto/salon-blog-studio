@@ -121,6 +121,13 @@
         <label class="btn btn-primary">設定ファイルを読み込む<input type="file" id="configFile" accept=".json" hidden></label></div>`;
       return;
     }
+    if (!G.unlocked && !drive.modeChecked) {
+      // まず合言葉が必要かを確かめる（不要ならそのままフォルダを開く）
+      drive.modeChecked = true;
+      body.innerHTML = '<p class="empty">共有フォルダにつないでいます…</p>';
+      G.detectMode().then(() => renderDrive()).catch((e) => { drive.error = e.message; renderDrive(); });
+      return;
+    }
     if (!G.unlocked) {
       body.innerHTML = `<div style="margin-top:12px">
         <label class="note" for="drivePass" style="display:block;margin:0 0 6px">共有フォルダの合言葉</label>
@@ -152,7 +159,7 @@
           <span class="note" style="margin:0">${drive.uploading ? esc(drive.uploading) : `投稿者：${esc((currentStaff() || {}).name || '未選択')}`}</span>
         </div>
       </div>` : '';
-    body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button></div>${inner}${uploadBox}
+    body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}${G.open ? '' : '<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button>'}</div>${inner}${uploadBox}
       <p class="note">お客様の顔が写った写真は、利用の許可があるものだけを使ってください。</p>`;
     body.querySelectorAll('img[data-img]').forEach((img) => {
       img.addEventListener('error', () => { img.outerHTML = '<div class="img-error">プレビューなし</div>'; });
@@ -753,7 +760,7 @@
       const endpoint = $('adEndpoint').value.trim();
       if (endpoint && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(endpoint)) { toast('URLの形が違います（https://script.google.com/macros/s/…/exec）'); return; }
       saveOverride((o) => { o.drive = { endpoint, rootName: $('adFolderName').value.trim() || '共有フォルダ' }; });
-      drive.list = null; drive.path = [];
+      drive.list = null; drive.path = []; drive.modeChecked = false; SRC.byId.gdrive.open = false;
       afterSettingsChange('共有フォルダの設定を保存しました'); return;
     }
     if (t.id === 'btnSetupLink') {

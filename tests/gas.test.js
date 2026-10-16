@@ -72,8 +72,17 @@ test('合言葉が正しければ一覧が返り、違えば断る', () => {
   assert.equal(call({ action: 'list' }).error, 'bad_key');
 });
 
-test('合言葉が未設定なら何も返さない', () => {
-  assert.equal(load(null)({ key: '', action: 'list' }).error, 'not_configured');
+test('合言葉が未設定なら、合言葉なしで使える（フォルダの外は引き続き断る）', () => {
+  const call = load(null);
+  assert.deepEqual(call({ action: 'mode' }), { ok: true, needKey: false });
+  assert.ok(call({ action: 'list' }).ok);
+  assert.equal(call({ action: 'image', id: 'secret' }).error, 'forbidden');
+});
+
+test('合言葉が必要かどうかの問い合わせは、まちがいの回数に数えない', () => {
+  const call = load('k');
+  for (let i = 0; i < 20; i++) assert.deepEqual(call({ action: 'mode' }), { ok: true, needKey: true });
+  assert.ok(call({ key: 'k', action: 'ping' }).ok);
 });
 
 test('フォルダの外のファイル・フォルダは返さない', () => {

@@ -50,7 +50,7 @@
   const ERRORS = {
     bad_key: '合言葉が違います',
     locked: '合言葉のまちがいが続いたため、1時間ほど止まっています。時間をおいてお試しください',
-    not_configured: '配る仕組みに合言葉が設定されていません（管理者に連絡してください）',
+    not_configured: '配る仕組みの設定が終わっていません（管理者に連絡してください）',
     forbidden: 'このフォルダの外の写真は見られません',
     not_found: '写真またはフォルダが見つかりません',
     no_consent: '利用の許可の確認にチェックしてください',
@@ -65,9 +65,10 @@
     label: '共有フォルダ',
     config: { endpoint: '', rootName: '共有フォルダ' },
     passcode: '',
+    open: false, // 合言葉なしで使える設定か
     thumbs: new Map(),
     get ready() { return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(this.config.endpoint || ''); },
-    get unlocked() { return Boolean(this.passcode); },
+    get unlocked() { return this.open || Boolean(this.passcode); },
     configure(cfg) { this.config = Object.assign({}, this.config, cfg); },
     setPasscode(v) { this.passcode = v || ''; },
 
@@ -84,6 +85,12 @@
     },
 
     async check() { return this.call({ action: 'ping' }); },
+    // 合言葉が必要か確かめる（不要なら open にする）
+    async detectMode() {
+      const d = await this.call({ action: 'mode' });
+      this.open = d.needKey === false;
+      return this.open;
+    },
 
     // フォルダの中身（フォルダと画像）
     async listFolder(folderId) {
