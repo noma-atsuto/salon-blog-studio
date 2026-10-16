@@ -886,6 +886,31 @@
     reader.readAsText(file, 'utf-8');
   }
 
+  // ---- スマホ：横にスワイプしてサイドバーを開け閉めする ----
+  // 開く：画面の左3分の1から右へ。閉じる：開いているときに左へ。
+  // 画面のいちばん端は iPhone の「戻る」と重なるので使わない。スライダーや入力欄の上では反応しない。
+  const swipe = { x: 0, y: 0, active: false };
+  const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
+  document.addEventListener('touchstart', (e) => {
+    swipe.active = false;
+    if (!isMobile() || e.touches.length !== 1) return;
+    if (e.target.closest('input, textarea, select, .crop, .pv, .gallery')) return;
+    const t = e.touches[0];
+    const open = $('sidebar').classList.contains('open');
+    if (!open && (t.clientX < 16 || t.clientX > window.innerWidth / 3)) return;
+    Object.assign(swipe, { x: t.clientX, y: t.clientY, active: true });
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!swipe.active) return;
+    swipe.active = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return; // 横に十分動いたときだけ
+    const open = $('sidebar').classList.contains('open');
+    if (!open && dx > 0) setMenu(true);
+    else if (open && dx < 0) setMenu(false);
+  }, { passive: true });
+
   document.addEventListener('click', (e) => { if (e.target.id === 'scrim') setMenu(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setMenu(false); });
   // ---- 設定リンク（#setup=… を開くと、共有フォルダの設定を入れる。リンクは LINE などで個別に送る） ----
