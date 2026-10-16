@@ -5,10 +5,14 @@
  * ・ドライブのほかのファイルは返しません（フォルダの中かどうかを毎回確かめます）
  * ・合言葉はこのファイルに書かず、「プロジェクトの設定 → スクリプト プロパティ」の PASSCODE に入れます
  * ・合言葉を1時間に10回まちがえると、1時間すべて止めます（4桁の合言葉でも当てられにくくするため）
- * ・写真の変更・削除はしません（読むだけ）
+ * ・写真の追加（upload）だけでき、変更・削除はしません
+ * ・追加できるのはフォルダの中・画像だけ・1枚10MBまで・1時間に60枚まで。利用許可の確認が必要です
  */
 const ROOT_ID = '1fxp-ECPTHG2UjGXpU7n00r6ATXIkNeAR'; // 店舗写真（スタッフ共用）
 const MAX_BYTES = 15 * 1024 * 1024; // 1枚 15MB まで
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 追加は1枚 10MB まで
+const MAX_UPLOADS_PER_HOUR = 60;
+const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FAILS = 10;
 const LOCK_SECONDS = 3600;
 
@@ -22,6 +26,7 @@ function doPost(e) {
     else if (req.action === 'list') out = list_(req.folder || ROOT_ID);
     else if (req.action === 'thumb') out = thumb_(req.id);
     else if (req.action === 'image') out = image_(req.id);
+    else if (req.action === 'upload') out = upload_(req);
     else throw err_('bad_request');
     return json_(Object.assign({ ok: true }, out));
   } catch (x) {
@@ -82,8 +87,11 @@ function list_(folderId) {
   while (it.hasNext()) {
     const f = it.next();
     if (!/^image\//.test(f.getMimeType()) || f.isTrashed()) continue;
+    // アプリから追加した写真は、説明欄の「投稿者:」を投稿者として返す
     let owner = '';
-    try { owner = f.getOwner() ? f.getOwner().getName() : ''; } catch (x) { owner = ''; }
+    const m = String(f.getDescription() || '').match(/投稿者:\s*([^\n／]+)/);
+    if (m) owner = m[1].trim();
+    else { try { owner = f.getOwner() ? f.getOwner().getName() : ''; } catch (x) { owner = ''; } }
     images.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().toISOString(), owner: owner });
   }
   const byName = function (a, b) { return a.name.localeCompare(b.name, 'ja'); };
@@ -104,6 +112,30 @@ function image_(id) {
   if (file.getSize() > MAX_BYTES) throw err_('too_large');
   const blob = file.getBlob();
   return { name: file.getName(), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
+}
+
+// 写真を1枚追加する（フォルダの中だけ・画像だけ・利用許可の確認が必要）
+function upload_(req) {
+  if (req.consent !== true) throw err_('no_consent');
+  if (UPLOAD_TYPES.indexOf(String(req.mime)) < 0) throw err_('not_image');
+  let folder;
+  try { folder = DriveApp.getFolderById(String(req.folder || '')); } catch (x) { throw err_('not_found'); }
+  if (!folderInRoot_(folder.getId(), 0)) throw err_('forbidden');
+  const bytes = Utilities.base64Decode(String(req.data || ''));
+  if (!bytes.length) throw err_('bad_request');
+  if (bytes.length > MAX_UPLOAD_BYTES) throw err_('too_large');
+  const cache = CacheService.getScriptCache();
+  const count = Number(cache.get('uploads') || 0);
+  if (count >= MAX_UPLOADS_PER_HOUR) throw err_('upload_limit');
+  cache.put('uploads', String(count + 1), 3600);
+  // ファイル名は記号を除いて短くする
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[req.mime];
+  const base = String(req.name || 'photo').replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 60) || 'photo';
+  const stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd_HHmm');
+  const file = folder.createFile(Utilities.newBlob(bytes, req.mime, stamp + '_' + base + '.' + ext));
+  const uploader = String(req.uploader || '不明').replace(/[\r\n／]+/g, ' ').slice(0, 40);
+  file.setDescription('投稿者: ' + uploader + '／利用許可: 確認済み（アプリから追加）／登録: ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm'));
+  return { file: { id: file.getId(), name: file.getName() } };
 }
 
 function err_(code) { const e = new Error(code); e.code = code; return e; }

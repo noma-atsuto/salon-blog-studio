@@ -142,7 +142,17 @@
           `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`)).join('')}</div>`
           : folders.length ? '' : '<p class="empty">このフォルダには写真がありません。</p>');
     }
-    body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button></div>${inner}
+    const here = drive.path[drive.path.length - 1];
+    const uploadBox = drive.list && !drive.loading ? `
+      <div class="upload-box">
+        <b>このフォルダ（${esc(here ? here.name : '')}）に写真を追加</b>
+        <label class="chip consent"><input type="checkbox" id="upConsent"${drive.consent ? ' checked' : ''}>お客様の顔が写っている写真は、AIでの画像づくりとブログに使う許可をもらっています</label>
+        <div class="actions">
+          <label class="btn btn-sm ${drive.uploading ? 'disabled' : ''}">写真を選んで追加<input type="file" id="upFile" accept="image/*" multiple hidden ${drive.uploading ? 'disabled' : ''}></label>
+          <span class="note" style="margin:0">${drive.uploading ? esc(drive.uploading) : `投稿者：${esc((currentStaff() || {}).name || '未選択')}`}</span>
+        </div>
+      </div>` : '';
+    body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button></div>${inner}${uploadBox}
       <p class="note">お客様の顔が写った写真は、利用の許可があるものだけを使ってください。</p>`;
     body.querySelectorAll('img[data-img]').forEach((img) => {
       img.addEventListener('error', () => { img.outerHTML = '<div class="img-error">プレビューなし</div>'; });
@@ -188,6 +198,26 @@
     catch (e) { G.setPasscode(''); drive.error = e.message; }
     renderDrive();
   }
+  // 選んだ写真を、今開いているフォルダに追加する
+  async function driveUpload(files) {
+    const here = drive.path[drive.path.length - 1];
+    const staff = currentStaff();
+    if (!here) return;
+    if (!drive.consent) { toast('利用の許可の確認にチェックしてください'); return; }
+    if (!staff) { toast('先に 03 で投稿者を選んでください'); return; }
+    const list = [...files].filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+    if (!list.length) { toast('画像を選んでください'); return; }
+    let ok = 0, ng = 0, lastErr = '';
+    for (let i = 0; i < list.length; i++) {
+      drive.uploading = `追加しています…（${i + 1} / ${list.length}）`; renderDrive();
+      try { await SRC.byId.gdrive.upload(here.id, list[i], staff.name); ok += 1; }
+      catch (e) { ng += 1; lastErr = driveError(e); if (e.code === 'bad_key' || e.code === 'locked' || e.code === 'upload_limit') break; }
+    }
+    drive.uploading = ''; drive.list = null; drive.consent = false;
+    toast(ng ? `${ok}枚追加しました。${ng}枚は追加できませんでした（${lastErr}）` : `${ok}枚追加しました`);
+    renderDrive();
+  }
+
   async function drivePick(id) {
     const img = drive.list && drive.list.images.find((x) => x.id === id);
     if (!img) return;
@@ -774,6 +804,8 @@
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.id === 'staffSelect') { state.staffId = t.value; update(); return; }
+    if (t.id === 'upConsent') { drive.consent = t.checked; return; }
+    if (t.id === 'upFile' && t.files.length) { const fs = [...t.files]; t.value = ''; driveUpload(fs); return; }
     if (t.id === 'configFile' && t.files[0]) { importStaff(t.files[0], true); t.value = ''; return; }
     if (t.id === 'staffFile' && t.files[0]) { importStaff(t.files[0], $('staffReplace').checked); t.value = ''; return; }
     if (t.id === 'adColorSub') { adminSel.colorSub = t.value; renderAdmin(); return; }

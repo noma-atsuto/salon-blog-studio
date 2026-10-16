@@ -53,6 +53,9 @@
     not_configured: '配る仕組みに合言葉が設定されていません（管理者に連絡してください）',
     forbidden: 'このフォルダの外の写真は見られません',
     not_found: '写真またはフォルダが見つかりません',
+    no_consent: '利用の許可の確認にチェックしてください',
+    upload_limit: '1時間に追加できる枚数（60枚）を超えました。時間をおいてお試しください',
+    not_image: '画像（JPEG・PNG・WebP）だけ追加できます',
     too_large: '写真が大きすぎます（15MBまで）',
     network: '共有フォルダにつながりませんでした。通信状態か、配る仕組みのURLを確認してください'
   };
@@ -102,6 +105,23 @@
       const url = d.data ? URL.createObjectURL(b64ToBlob(d.data, d.mime)) : '';
       this.thumbs.set(fileId, url);
       return url;
+    },
+
+    // 写真を1枚追加する。送る前に長い辺2400pxまで縮め、JPEGにする（iPhone の HEIC などもここで変換）
+    async upload(folderId, file, uploader) {
+      const bitmap = await createImageBitmap(file).catch(() => null);
+      if (!bitmap) throw Object.assign(new Error('この写真は読み込めませんでした（JPEG・PNG で試してください）'), { code: 'decode' });
+      const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+      const d = await this.call({ action: 'upload', folder: folderId, name: file.name, mime: 'image/jpeg', data: btoa(bin), uploader, consent: true });
+      return d.file;
     },
 
     // 選んだ写真の本体（ブラウザの中だけで使う）

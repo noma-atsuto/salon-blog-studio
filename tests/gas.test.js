@@ -16,10 +16,17 @@ const files = {
 };
 const iter = (arr) => { let i = 0; return { hasNext: () => i < arr.length, next: () => arr[i++] }; };
 const blob = (mime) => ({ getContentType: () => mime, getBytes: () => [1, 2, 3] });
+const created = [];
 function folderObj(id) {
   if (!folders[id]) throw new Error('no folder');
   return {
     getId: () => id, getName: () => folders[id].name,
+    createFile: (b) => {
+      const fid = 'new' + created.length;
+      files[fid] = { name: b.name, mime: b.mime, parents: [id], size: b.bytes.length, desc: '' };
+      created.push(fid);
+      return fileObj(fid);
+    },
     getParents: () => iter(folders[id].parents.map(folderObj)),
     getFolders: () => iter(Object.keys(folders).filter((k) => folders[k].parents.includes(id)).map(folderObj)),
     getFiles: () => iter(Object.keys(files).filter((k) => files[k].parents.includes(id)).map(fileObj))
@@ -31,6 +38,7 @@ function fileObj(id) {
   return {
     getId: () => id, getName: () => f.name, getMimeType: () => f.mime, getSize: () => f.size, isTrashed: () => false,
     getDateCreated: () => new Date('2026-10-12T00:00:00Z'), getOwner: () => ({ getName: () => 'オーナー' }),
+    getDescription: () => f.desc || '', setDescription: (d) => { f.desc = d; },
     getParents: () => iter(f.parents.map(folderObj)), getThumbnail: () => blob('image/png'), getBlob: () => blob(f.mime)
   };
 }
@@ -41,7 +49,12 @@ function load(passcode) {
     DriveApp: { getFolderById: folderObj, getFileById: fileObj },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k === 'PASSCODE' ? passcode : null) }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (store.has(k) ? store.get(k) : null), put: (k, v) => store.set(k, v) }) },
-    Utilities: { base64Encode: () => 'AQID' },
+    Utilities: {
+      base64Encode: () => 'AQID',
+      base64Decode: (t) => [...Buffer.from(t, 'base64')],
+      newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
+      formatDate: () => '20261016_1200'
+    },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (t) => ({ setMimeType: () => ({ body: JSON.parse(t) }) }) }
   };
   vm.createContext(ctx);
@@ -80,4 +93,35 @@ test('合言葉を10回まちがえると、正しい合言葉でも止まる', 
   assert.ok(call({ key: '4831', action: 'ping' }).ok); // 9回までは止まらない
   for (let i = 0; i < 1; i++) call({ key: 'x', action: 'ping' });
   assert.equal(call({ key: '4831', action: 'ping' }).error, 'locked');
+});
+
+test('写真の追加：フォルダの中に、投稿者と利用許可の記録つきで入る', () => {
+  const call = load('k');
+  const data = Buffer.from('fake-jpeg-bytes').toString('base64');
+  const r = call({ key: 'k', action: 'upload', folder: 'HAIR', name: 'IMG_0001.HEIC', mime: 'image/jpeg', data, uploader: 'スタイリストA', consent: true });
+  assert.ok(r.ok, JSON.stringify(r));
+  const f = files[r.file.id];
+  assert.deepEqual(f.parents, ['HAIR']);
+  assert.match(f.name, /^20261016_1200_IMG_0001\.jpg$/);
+  assert.match(f.desc, /投稿者: スタイリストA／利用許可: 確認済み/);
+  const list = call({ key: 'k', action: 'list', folder: 'HAIR' });
+  assert.ok(list.images.some((x) => x.id === r.file.id && x.owner === 'スタイリストA')); // 一覧の投稿者にも出る
+});
+
+test('写真の追加：許可なし・フォルダの外・画像以外・大きすぎ・合言葉なしは断る', () => {
+  const call = load('k');
+  const data = Buffer.from('x').toString('base64');
+  const req = { key: 'k', action: 'upload', folder: 'HAIR', name: 'a.jpg', mime: 'image/jpeg', data, uploader: 'A', consent: true };
+  assert.equal(call({ ...req, consent: false }).error, 'no_consent');
+  assert.equal(call({ ...req, folder: 'SECRET' }).error, 'forbidden');
+  assert.equal(call({ ...req, mime: 'text/plain' }).error, 'not_image');
+  assert.equal(call({ ...req, data: Buffer.alloc(11 * 1024 * 1024).toString('base64') }).error, 'too_large');
+  assert.equal(call({ ...req, key: 'wrong' }).error, 'bad_key');
+});
+
+test('写真の追加：1時間に60枚まで', () => {
+  const call = load('k');
+  const req = { key: 'k', action: 'upload', folder: ROOT, name: 'a.jpg', mime: 'image/png', data: Buffer.from('y').toString('base64'), uploader: 'A', consent: true };
+  for (let i = 0; i < 60; i++) assert.ok(call(req).ok);
+  assert.equal(call(req).error, 'upload_limit');
 });

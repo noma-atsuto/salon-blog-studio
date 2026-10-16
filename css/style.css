@@ -114,6 +114,11 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .folders { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .folders svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 
+.upload-box { margin-top: 14px; padding: 12px; border: 1px dashed var(--greige); border-radius: 8px; background: #FBFAF8; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; }
+.upload-box .consent { border-radius: 8px; align-items: flex-start; line-height: 1.5; text-align: left; }
+.upload-box .consent input { margin-top: 3px; }
+.btn.disabled { opacity: .5; pointer-events: none; }
+
 /* ボタン */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
