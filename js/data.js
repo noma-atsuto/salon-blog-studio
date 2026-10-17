@@ -12,7 +12,9 @@
     blog: { minChars: 350, maxChars: 450, minSentences: 15, maxSentences: 20, titleMax: 30 },
 
     // 共有画像フォルダ（gas/Code.gs を公開したURL）。オーナーの判断で、設定なし・合言葉なしで使える形にしている
-    drive: { endpoint: 'https://script.google.com/macros/s/AKfycbyvqC2cj2Xyz3EU6w_txfWKSm73zRDG1VQDOywavDxvJSrPcCn5YgPaQFzuk4Ld_d_VYw/exec', rootName: '店舗写真（スタッフ共用）' },
+    drive: { endpoint: 'https://script.google.com/macros/s/AKfycbyvqC2cj2Xyz3EU6w_txfWKSm73zRDG1VQDOywavDxvJSrPcCn5YgPaQFzuk4Ld_d_VYw/exec', rootName: '店舗写真（スタッフ共用）',
+      // 開いたときに最初に表示するフォルダ（03_ヘアスタイル作品）
+      startFolderId: '1CaviAP2TWmu-VQLEnVhDwRyidIkDXTAZ', startName: '03_ヘアスタイル作品' },
 
     seasons: {
       spring: {

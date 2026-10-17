@@ -54,7 +54,7 @@
     genreId: 'color', subId: null, hairColor: 'auto',
     customLabel: '', customTitle: '', customNote: '',
     source: 'local'
-  }, saved, { imageId: null });
+  }, saved, { imageId: null, source: 'gdrive' }); // 写真は毎回、共有フォルダを開いた状態から始める
   const ui = { cands: [], selected: 0, round: 0, texts: { category: '', catch: '', title: '', subtitle: '' }, crops: {} };
 
   function saveState() {
@@ -102,7 +102,13 @@
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
   }
   // ---- 共有フォルダ（Google ドライブ。オーナーの「配る仕組み」経由） ----
-  const drive = { path: [], list: null, loading: false, error: '', picking: '' };
+  const drive = { path: [], list: null, children: {}, loading: false, error: '', picking: '', uploaderId: null };
+  const startFolder = () => {
+    const c = SRC.byId.gdrive.config;
+    return c.startFolderId ? { id: c.startFolderId, name: c.startName || 'ヘアスタイル作品' } : null;
+  };
+  const FOLDER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>';
+  const folderChip = (f, count) => `<button type="button" class="chip" data-folder="${esc(f.id)}" data-folder-name="${esc(f.name)}">${FOLDER_ICON}${esc(f.name)}${count != null ? `<span class="cnt">${count}</span>` : ''}</button>`;
   SRC.byId.gdrive.setPasscode(store.get('sbs.drivePass', ''));
   function thumbCard(it, selected, extra) {
     const src = it.thumb || it.url;
@@ -144,7 +150,13 @@
     else if (drive.error) inner = `<ul class="warn" style="margin-top:10px"><li>${esc(drive.error)}</li></ul><button type="button" class="btn btn-sm" id="btnDriveRetry">もう一度読み込む</button>`;
     else if (drive.list) {
       const { folders, images } = drive.list;
-      inner = (folders.length ? `<div class="folders">${folders.map((f) => `<button type="button" class="chip" data-folder="${esc(f.id)}" data-folder-name="${esc(f.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>${esc(f.name)}</button>`).join('')}</div>` : '')
+      // フォルダは、ひとつ下の階層まで広げて表示する（数字はそのフォルダの写真の枚数）
+      const tree = folders.map((f) => {
+        const ch = drive.children[f.id];
+        return `<div class="fgroup">${folderChip(f, ch ? ch.count : null)}${ch && ch.folders.length
+          ? `<div class="fchildren">${ch.folders.map((c) => folderChip(c, null)).join('')}</div>` : ''}</div>`;
+      }).join('');
+      inner = (folders.length ? `<div class="ftree">${tree}</div>` : '')
         + (images.length ? `<div class="gallery">${images.map((it) => thumbCard(it, state.imageId === it.id,
           `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`)).join('')}</div>`
           : folders.length ? '' : '<p class="empty">このフォルダには写真がありません。</p>');
@@ -156,7 +168,8 @@
         <label class="chip consent"><input type="checkbox" id="upConsent"${drive.consent ? ' checked' : ''}>お客様の顔が写っている写真は、AIでの画像づくりとブログに使う許可をもらっています</label>
         <div class="actions">
           <label class="btn btn-sm ${drive.uploading ? 'disabled' : ''}">写真を選んで追加<input type="file" id="upFile" accept="image/*" multiple hidden ${drive.uploading ? 'disabled' : ''}></label>
-          <span class="note" style="margin:0">${drive.uploading ? esc(drive.uploading) : `投稿者：${esc((currentStaff() || {}).name || '未選択')}`}</span>
+          ${drive.uploading ? `<span class="note" style="margin:0">${esc(drive.uploading)}</span>` : `<label class="note" for="upStaff" style="margin:0">投稿者</label>
+          <select id="upStaff" class="input" style="width:auto;padding:6px 10px">${settings.staff.map((st) => `<option value="${esc(st.id)}" ${st.id === (drive.uploaderId || state.staffId) ? 'selected' : ''}>${esc(st.name)}</option>`).join('')}</select>`}
         </div>
       </div>` : '';
     body.innerHTML = `<div class="crumbs">${crumbs || esc(G.config.rootName)}${G.open ? '' : '<button type="button" class="link" id="btnDriveOut" style="margin-left:auto">合言葉を消す</button>'}</div>${inner}${uploadBox}
@@ -190,9 +203,17 @@
     const G = SRC.byId.gdrive;
     drive.loading = true; drive.error = ''; renderDrive();
     try {
-      const cur = drive.path[drive.path.length - 1];
-      drive.list = await G.listFolder(cur ? cur.id : '');
-      if (!drive.path.length) drive.path = [{ id: drive.list.folder.id, name: drive.list.folder.name }];
+      const cur = drive.path[drive.path.length - 1] || startFolder();
+      let list;
+      try { list = await G.listFolder(cur ? cur.id : ''); }
+      catch (e) { if (drive.path.length || !cur) throw e; list = await G.listFolder(''); } // 最初のフォルダが無ければ一番上から
+      drive.list = list;
+      if (!drive.path.length) drive.path = [{ id: list.folder.id, name: list.folder.name }];
+      // ひとつ下の階層を、まとめて読み込む
+      drive.children = {};
+      await Promise.all(list.folders.map(async (f) => {
+        try { const d = await G.listFolder(f.id); drive.children[f.id] = { folders: d.folders, count: d.images.length }; } catch (e) { /* 表示を省くだけ */ }
+      }));
     } catch (e) { drive.list = null; drive.error = driveError(e); }
     drive.loading = false; renderDrive();
   }
@@ -208,10 +229,10 @@
   // 選んだ写真を、今開いているフォルダに追加する
   async function driveUpload(files) {
     const here = drive.path[drive.path.length - 1];
-    const staff = currentStaff();
+    const staff = settings.staff.find((st) => st.id === (drive.uploaderId || state.staffId)) || null;
     if (!here) return;
     if (!drive.consent) { toast('利用の許可の確認にチェックしてください'); return; }
-    if (!staff) { toast('先に 03 で投稿者を選んでください'); return; }
+    if (!staff) { toast('投稿者を選んでください'); return; }
     const list = [...files].filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
     if (!list.length) { toast('画像を選んでください'); return; }
     let ok = 0, ng = 0, lastErr = '';
@@ -461,6 +482,98 @@
       </div>`;
   }
 
+  // ---- スタイル投稿数（共有フォルダの写真の枚数を、フォルダ別・投稿者別に数える） ----
+  const styleStats = { data: null, loading: false, error: '', at: 0 };
+  async function loadStyleStats() {
+    const G = SRC.byId.gdrive;
+    const start = startFolder();
+    styleStats.loading = true; styleStats.error = ''; renderStyles();
+    try {
+      if (!G.unlocked) await G.detectMode();
+      if (!G.unlocked) throw new Error('共有フォルダの合言葉が必要です（作成画面の「共有フォルダ」で入れてください）');
+      // フォルダを1段ずつ、同時に読み込む
+      const nodes = [];
+      let level = [{ id: start ? start.id : '', depth: 0, parent: null }];
+      while (level.length) {
+        const lists = await Promise.all(level.map((n) => G.listFolder(n.id)));
+        const next = [];
+        lists.forEach((d, i) => {
+          const node = { id: d.folder.id, name: d.folder.name, depth: level[i].depth, parent: level[i].parent, images: d.images };
+          nodes.push(node);
+          d.folders.forEach((f) => next.push({ id: f.id, depth: node.depth + 1, parent: node.id }));
+        });
+        level = next;
+      }
+      styleStats.data = nodes; styleStats.at = Date.now();
+    } catch (e) { styleStats.error = e.message; }
+    styleStats.loading = false; renderStyles();
+  }
+  function renderStyles() {
+    const body = $('stylesBody');
+    if (!styleStats.data && !styleStats.loading && !styleStats.error) { loadStyleStats(); return; }
+    if (styleStats.loading) { body.innerHTML = '<div class="card"><p class="empty">フォルダを数えています…</p></div>'; return; }
+    if (styleStats.error) { body.innerHTML = `<ul class="warn" style="margin-top:14px"><li>${esc(styleStats.error)}</li></ul><button type="button" class="btn btn-sm" id="btnStylesReload">もう一度読み込む</button>`; return; }
+    const nodes = styleStats.data;
+    const now = new Date();
+    const ym = (v) => { const d = new Date(v); return d.getFullYear() * 12 + d.getMonth(); };
+    const thisM = ym(now), lastM = thisM - 1;
+    const parseDate = (img) => { const m = String(img.date || '').match(/(\d{4})\/(\d{2})\/(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+    // 下の階層も含めた合計
+    const byId = new Map(nodes.map((n) => [n.id, Object.assign(n, { total: 0, month: 0, last: 0 })]));
+    for (const n of nodes) {
+      for (const img of n.images) {
+        const d = parseDate(img);
+        for (let p = n; p; p = byId.get(p.parent)) {
+          p.total += 1;
+          if (d && ym(d) === thisM) p.month += 1;
+          if (d && ym(d) === lastM) p.last += 1;
+        }
+      }
+    }
+    // 並び順：フォルダの階層どおり
+    const order = [];
+    const visit = (n) => { order.push(n); nodes.filter((c) => c.parent === n.id).sort((a, b) => a.name.localeCompare(b.name, 'ja')).forEach(visit); };
+    const root = nodes.find((n) => !n.parent);
+    if (root) visit(root);
+    const rows = order.filter((n) => n !== root);
+    // 投稿者別
+    const people = new Map(settings.staff.map((st) => [st.name, { name: st.name, total: 0, month: 0, last: 0 }]));
+    for (const n of nodes) for (const img of n.images) {
+      const name = img.uploader && img.uploader !== '—' ? img.uploader : '不明';
+      if (!people.has(name)) people.set(name, { name: `${name}（一覧外）`, total: 0, month: 0, last: 0 });
+      const r = people.get(name); const d = parseDate(img);
+      r.total += 1; if (d && ym(d) === thisM) r.month += 1; if (d && ym(d) === lastM) r.last += 1;
+    }
+    const staffRows = [...people.values()].sort((a, b) => b.month - a.month || b.total - a.total);
+    const max = Math.max(1, ...rows.filter((r) => r.depth === 1).map((r) => r.total));
+    const t = new Date(styleStats.at);
+    body.innerHTML = `
+      <div class="stat-row">
+        <div class="stat"><div class="k">今月（${now.getMonth() + 1}月）</div><div class="v">${root ? root.month : 0}</div></div>
+        <div class="stat"><div class="k">先月</div><div class="v">${root ? root.last : 0}</div></div>
+        <div class="stat"><div class="k">合計</div><div class="v">${root ? root.total : 0}</div></div>
+      </div>
+      <div class="card">
+        <h3>スタイル別</h3>
+        <table class="posts">
+          <thead><tr><th>スタイル</th><th class="barcell"></th><th style="text-align:right">今月</th><th style="text-align:right">先月</th><th style="text-align:right">合計</th></tr></thead>
+          <tbody>${rows.map((r) => `<tr class="${r.depth === 1 ? 'grp' : ''}"><td style="padding-left:${8 + (r.depth - 1) * 18}px">${esc(r.name.replace(/^\d+_/, ''))}</td>
+            <td class="barcell">${r.depth === 1 ? `<div class="bar" style="width:${(r.total / max) * 100}%;${r.total ? '' : 'opacity:.15'}"></div>` : ''}</td>
+            <td class="n">${r.month}</td><td class="n">${r.last}</td><td class="n">${r.total}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>投稿者別</h3>
+        <table class="posts">
+          <thead><tr><th>投稿者</th><th style="text-align:right">今月</th><th style="text-align:right">先月</th><th style="text-align:right">合計</th></tr></thead>
+          <tbody>${staffRows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${r.month}</td><td class="n">${r.last}</td><td class="n">${r.total}</td></tr>`).join('')}</tbody>
+        </table>
+        <p class="note">投稿者は、アプリから追加した写真に記録された名前です。ドライブに直接入れた写真は、持ち主の名前になります。</p>
+      </div>
+      <div class="actions" style="margin-top:12px"><button type="button" class="btn btn-sm" id="btnStylesReload">最新の枚数に更新</button>
+        <span class="note" style="margin:0">${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 時点</span></div>`;
+  }
+
   function setMenu(open) {
     $('sidebar').classList.toggle('open', open);
     $('scrim').hidden = !open;
@@ -591,13 +704,14 @@
   // ---- 画面の切り替え ----
   function showView() {
     const v = (location.hash || '#create').slice(1);
-    const VIEWS = ['create', 'history', 'posts', 'admin'];
+    const VIEWS = ['create', 'history', 'posts', 'styles', 'admin'];
     const view = VIEWS.includes(v) ? v : 'create';
     for (const id of VIEWS) $(`view-${id}`).hidden = id !== view;
     document.querySelectorAll('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === view));
     setMenu(false);
     if (view === 'history') renderHistory();
     if (view === 'posts') renderPosts();
+    if (view === 'styles') renderStyles();
     if (view === 'admin') renderAdmin();
     window.scrollTo(0, 0);
   }
@@ -640,6 +754,7 @@
     if (d.color) { state.hairColor = d.color; renderColors(); regen(); return; }
     if (d.cand) { ui.selected = Number(d.cand); ui.texts = Object.assign({}, ui.cands[ui.selected]); renderCands(); renderFields(); update(); return; }
 
+    if (t.id === 'btnStylesReload') { styleStats.data = null; styleStats.error = ''; loadStyleStats(); return; }
     if (t.id === 'btnMenu') { setMenu(!$('sidebar').classList.contains('open')); return; }
     if (t.id === 'btnMore') { ui.round += 1; regen(true); toast('別案を作りました'); return; }
     if (t.id === 'btnCopy') {
@@ -820,6 +935,7 @@
     const t = e.target;
     if (t.id === 'staffSelect') { state.staffId = t.value; update(); return; }
     if (t.id === 'upConsent') { drive.consent = t.checked; return; }
+    if (t.id === 'upStaff') { drive.uploaderId = t.value; return; }
     if (t.id === 'upFile' && t.files.length) { const fs = [...t.files]; t.value = ''; driveUpload(fs); return; }
     if (t.id === 'configFile' && t.files[0]) { importStaff(t.files[0], true); t.value = ''; return; }
     if (t.id === 'staffFile' && t.files[0]) { importStaff(t.files[0], $('staffReplace').checked); t.value = ''; return; }
@@ -887,7 +1003,7 @@
   }
 
   // ---- スマホ：横にスワイプしてサイドバーを開け閉めする ----
-  // 開く：画面の左3分の1から右へ。閉じる：開いているときに左へ。
+  // 開く：画面の左3分の1から右へ、または画面中央付近から左へ。閉じる：開いているときに左へ。
   // 画面のいちばん端は iPhone の「戻る」と重なるので使わない。スライダーや入力欄の上では反応しない。
   const swipe = { x: 0, y: 0, active: false };
   const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
@@ -897,7 +1013,7 @@
     if (e.target.closest('input, textarea, select, .crop, .pv, .gallery')) return;
     const t = e.touches[0];
     const open = $('sidebar').classList.contains('open');
-    if (!open && (t.clientX < 16 || t.clientX > window.innerWidth / 3)) return;
+    if (!open && (t.clientX < 16 || t.clientX > window.innerWidth * 0.8)) return;
     Object.assign(swipe, { x: t.clientX, y: t.clientY, active: true });
   }, { passive: true });
   document.addEventListener('touchend', (e) => {
@@ -907,7 +1023,9 @@
     const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return; // 横に十分動いたときだけ
     const open = $('sidebar').classList.contains('open');
-    if (!open && dx > 0) setMenu(true);
+    const W = window.innerWidth;
+    // 開く：左3分の1から右へ／画面中央付近（左右25〜80%）から左へ
+    if (!open && ((dx > 0 && swipe.x <= W / 3) || (dx < 0 && swipe.x >= W * 0.25))) setMenu(true);
     else if (open && dx < 0) setMenu(false);
   }, { passive: true });
 

@@ -119,6 +119,14 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .upload-box .consent input { margin-top: 3px; }
 .btn.disabled { opacity: .5; pointer-events: none; }
 
+.ftree { display: grid; gap: 8px; margin-top: 10px; }
+.fgroup { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--surface); }
+.fgroup > .chip { font-weight: 700; color: var(--ink); }
+.fchildren { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 14px; }
+.chip .cnt { margin-left: 4px; font-size: 11px; color: var(--ink-3); font-weight: 400; }
+.chip svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
+.posts tr.grp td { font-weight: 700; background: #FBFAF8; }
+
 /* ボタン */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
