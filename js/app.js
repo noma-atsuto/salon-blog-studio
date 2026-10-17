@@ -482,7 +482,7 @@
       </div>`;
   }
 
-  // ---- スタイル投稿数（共有フォルダの写真の枚数を、フォルダ別・投稿者別に数える） ----
+  // ---- 投稿者の投稿数（共有フォルダに入れた写真の枚数を、投稿者ごとに数える） ----
   const styleStats = { data: null, loading: false, error: '', at: 0 };
   async function loadStyleStats() {
     const G = SRC.byId.gdrive;
@@ -518,25 +518,7 @@
     const ym = (v) => { const d = new Date(v); return d.getFullYear() * 12 + d.getMonth(); };
     const thisM = ym(now), lastM = thisM - 1;
     const parseDate = (img) => { const m = String(img.date || '').match(/(\d{4})\/(\d{2})\/(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
-    // 下の階層も含めた合計
-    const byId = new Map(nodes.map((n) => [n.id, Object.assign(n, { total: 0, month: 0, last: 0 })]));
-    for (const n of nodes) {
-      for (const img of n.images) {
-        const d = parseDate(img);
-        for (let p = n; p; p = byId.get(p.parent)) {
-          p.total += 1;
-          if (d && ym(d) === thisM) p.month += 1;
-          if (d && ym(d) === lastM) p.last += 1;
-        }
-      }
-    }
-    // 並び順：フォルダの階層どおり
-    const order = [];
-    const visit = (n) => { order.push(n); nodes.filter((c) => c.parent === n.id).sort((a, b) => a.name.localeCompare(b.name, 'ja')).forEach(visit); };
-    const root = nodes.find((n) => !n.parent);
-    if (root) visit(root);
-    const rows = order.filter((n) => n !== root);
-    // 投稿者別
+    // 投稿者ごとに数える
     const people = new Map(settings.staff.map((st) => [st.name, { name: st.name, total: 0, month: 0, last: 0 }]));
     for (const n of nodes) for (const img of n.images) {
       const name = img.uploader && img.uploader !== '—' ? img.uploader : '不明';
@@ -545,32 +527,19 @@
       r.total += 1; if (d && ym(d) === thisM) r.month += 1; if (d && ym(d) === lastM) r.last += 1;
     }
     const staffRows = [...people.values()].sort((a, b) => b.month - a.month || b.total - a.total);
-    const max = Math.max(1, ...rows.filter((r) => r.depth === 1).map((r) => r.total));
+    const max = Math.max(1, ...staffRows.map((r) => r.month));
     const t = new Date(styleStats.at);
     body.innerHTML = `
-      <div class="stat-row">
-        <div class="stat"><div class="k">今月（${now.getMonth() + 1}月）</div><div class="v">${root ? root.month : 0}</div></div>
-        <div class="stat"><div class="k">先月</div><div class="v">${root ? root.last : 0}</div></div>
-        <div class="stat"><div class="k">合計</div><div class="v">${root ? root.total : 0}</div></div>
-      </div>
       <div class="card">
-        <h3>スタイル別</h3>
         <table class="posts">
-          <thead><tr><th>スタイル</th><th class="barcell"></th><th style="text-align:right">今月</th><th style="text-align:right">先月</th><th style="text-align:right">合計</th></tr></thead>
-          <tbody>${rows.map((r) => `<tr class="${r.depth === 1 ? 'grp' : ''}"><td style="padding-left:${8 + (r.depth - 1) * 18}px">${esc(r.name.replace(/^\d+_/, ''))}</td>
-            <td class="barcell">${r.depth === 1 ? `<div class="bar" style="width:${(r.total / max) * 100}%;${r.total ? '' : 'opacity:.15'}"></div>` : ''}</td>
+          <thead><tr><th>投稿者</th><th class="barcell"></th><th style="text-align:right">今月</th><th style="text-align:right">先月</th><th style="text-align:right">合計</th></tr></thead>
+          <tbody>${staffRows.map((r) => `<tr><td>${esc(r.name)}</td>
+            <td class="barcell"><div class="bar" style="width:${(r.month / max) * 100}%;${r.month ? '' : 'opacity:.15'}"></div></td>
             <td class="n">${r.month}</td><td class="n">${r.last}</td><td class="n">${r.total}</td></tr>`).join('')}</tbody>
         </table>
+        <p class="note">アプリの「写真を追加」で入れた写真を、投稿者ごとに数えています。ドライブに直接入れた写真は、持ち主の名前で数えます。</p>
       </div>
-      <div class="card">
-        <h3>投稿者別</h3>
-        <table class="posts">
-          <thead><tr><th>投稿者</th><th style="text-align:right">今月</th><th style="text-align:right">先月</th><th style="text-align:right">合計</th></tr></thead>
-          <tbody>${staffRows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${r.month}</td><td class="n">${r.last}</td><td class="n">${r.total}</td></tr>`).join('')}</tbody>
-        </table>
-        <p class="note">投稿者は、アプリから追加した写真に記録された名前です。ドライブに直接入れた写真は、持ち主の名前になります。</p>
-      </div>
-      <div class="actions" style="margin-top:12px"><button type="button" class="btn btn-sm" id="btnStylesReload">最新の枚数に更新</button>
+      <div class="actions" style="margin-top:12px"><button type="button" class="btn btn-sm" id="btnStylesReload">最新の数に更新</button>
         <span class="note" style="margin:0">${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')} 時点</span></div>`;
   }
 
