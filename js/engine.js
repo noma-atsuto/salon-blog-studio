@@ -324,26 +324,42 @@
     const T = cleanTitleText(texts.title);
     const genre = cleanTitleText(g.id === 'custom' ? (state.customLabel || '') : (sub && sub.category) || g.label);
     const area = b.titleWord;
-    // 「池袋で〜」の形。施術ごとの悩みに寄りそう言い方にする（効果を保証する言い方は使わない）
+    // 「池袋」の入る位置（はじめ・まんなか・おわり）を散らして、自然な言い方にする
+    // 施術ごとの悩みに寄りそう。効果を保証する言い方や、確かめられない言い方（人気など）は使わない
     const worries = {
-      color: ['髪色にお困りの', '髪色を変えたい', '垢抜けたい', '派手すぎない髪色を探す'],
-      perm: ['パーマにお悩みの', '朝のセットを楽にしたい', '髪に動きがほしい', '初めてパーマをかけたい'],
-      cut: ['髪型にお困りの', '垢抜けたい', '清潔感を出したい', '髪型を変えたい'],
-      straight: ['くせ毛にお悩みの', 'うねりが気になる', '朝のセットを楽にしたい', '髪のまとまりがほしい'],
-      custom: ['髪型にお困りの', '垢抜けたい', '清潔感を出したい']
-    }[g.group] || [];
-    const patterns = [
-      ...worries.map((w) => `${area}で${w}メンズ必見`),
-      ...worries.map((w) => `${area}で${w}メンズへ${T}`),
-      `${area}で${T}にしたいメンズへ`, `${area}で${T}を試したいメンズ必見`,
-      `${area}で${season}の${T}を楽しむ`, `${area}で叶える${season}の${T}`
-    ];
-    const ok = uniq(patterns.map(cleanTitleText)).filter((t) => checkBlogTitle(settings, t).length === 0);
+      color: ['髪色にお困り', '髪色を変えたい', '垢抜けたい'],
+      perm: ['パーマにお悩み', '朝のセットを楽にしたい', '髪に動きがほしい'],
+      cut: ['髪型にお困り', '清潔感を出したい', '垢抜けたい'],
+      straight: ['くせ毛にお悩み', 'うねりが気になる', 'まとまりがほしい'],
+      custom: ['髪型にお困り', '垢抜けたい']
+    }[g.group] || ['垢抜けたい'];
+    const men = (w) => `${w}${/(お困り|お悩み)$/.test(w) ? 'の' : ''}メンズ`;
+    const nara = (w) => (/(お困り|お悩み)$/.test(w) ? `${w}なら` : null);
+    const groups = {
+      start: [
+        ...worries.map((w) => `${area}で${men(w)}必見`),
+        `${area}メンズに似合う${season}の${T}`, `${area}駅東口から通える${T}`, `${area}で叶える${season}の${T}`
+      ],
+      middle: [
+        ...worries.map((w) => `${men(w)}へ${area}で叶える${T}`),
+        ...worries.map(nara).filter(Boolean).map((w) => `${w}${area}の${genre}`),
+        `${season}の${T}は${area}のサロンで`, `${T}で垢抜ける${area}メンズ`
+      ],
+      end: [
+        `大人の${T}なら${area}`, `${season}に似合う${T}を${area}で`, `${T}を試すなら${area}`,
+        `${season}らしい${T}にするなら${area}`
+      ]
+    };
     const rand = rng(hashStr([state.season, g.id, sub ? sub.id : '', T, round || 0].join('|')));
-    const mixed = shuffled(ok, rand);
-    // 1つ目は「〜メンズ必見」の形にする
-    const first = mixed.find((t) => t.endsWith('必見'));
-    const list = first ? [first, ...mixed.filter((t) => t !== first)] : mixed;
+    const valid = (list) => shuffled(uniq(list.map(cleanTitleText)).filter((t) => checkBlogTitle(settings, t).length === 0), rand);
+    const pools = shuffled(['start', 'middle', 'end'], rand).map((k) => valid(groups[k]));
+    // 3つの案は、「池袋」の位置がちがうものを1つずつ選ぶ（足りなければ残りから）
+    const list = [];
+    const tail = (t) => t.slice(-3);
+    const fresh = (t) => !list.includes(t) && !list.some((x) => tail(x) === tail(t));
+    for (const pool of pools) { const t = pool.find(fresh); if (t) list.push(t); }
+    for (const pool of pools) for (const t of pool) if (list.length < count && fresh(t)) list.push(t);
+    for (const pool of pools) for (const t of pool) if (list.length < count && !list.includes(t)) list.push(t);
     if (!list.length) list.push(cleanTitleText(`${area}${T}`).slice(0, b.titleMax));
     return list.slice(0, count);
   }

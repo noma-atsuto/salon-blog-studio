@@ -231,14 +231,17 @@ test('ブログ用プロンプトは、選んだタイトルを1行目にその�
   assert.deepEqual(E.checkBlogText(fixed, D.shopFooter, D), []);
 });
 
-test('ブログのタイトル案は「池袋で〜」で始まり、1つ目は「〜メンズ必見」', () => {
+test('ブログのタイトル案は「池袋」の位置がばらける（「池袋で」始まりは3つのうち1つまで）', () => {
   for (const g of D.genres) for (const subId of g.subs ? g.subs.map((x) => x.id) : [null]) {
     const st = { ...base, genreId: g.id, subId };
     const title = E.titleCandidates(D, st)[0];
-    for (const r of [0, 1, 2]) {
+    for (const r of [0, 1, 2, 3]) {
       const c = E.blogTitleCandidates(D, st, { title }, r);
-      assert.ok(c.every((t) => t.startsWith('池袋で') && !t.includes('人気')), c.join('/'));
-      assert.ok(c[0].endsWith('メンズ必見'), c[0]);
+      assert.equal(c.length, 3, c.join('/'));
+      assert.ok(c.filter((t) => t.startsWith('池袋で')).length <= 1, c.join('/'));
+      assert.ok(c.some((t) => !t.startsWith('池袋')), c.join('/'));
+      assert.ok(c.every((t) => !t.includes('人気')), c.join('/'));
+      assert.equal(new Set(c.map((t) => t.slice(-3))).size, 3, `終わり方が重なっている：${c.join('/')}`);
     }
   }
 });
