@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SALON BLOG STUDIO</title>
-  <meta name="sbs-version" content="202610172009">
+  <meta name="sbs-version" content="202610182003">
   <meta name="description" content="ブログ用アイキャッチ画像のプロンプトを作るツール">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=202610172009">
+  <link rel="stylesheet" href="css/style.css?v=202610182003">
 </head>
 <body>
   <!-- スマホ用の上部バー（☰でサイドバーを開く） -->
@@ -108,10 +108,21 @@
         </div>
 
         <div class="step">
-          <h2><span class="num">09</span>ブログ本文を作る</h2>
-          <p class="note" style="margin:0 0 12px">上で選んだ季節・テイスト・施術・タイトルに合わせた、ブログ本文づくりのプロンプトです。本文は1文ごとに改行、絵文字なし、記号は「、」「。」だけ。最後に店舗情報が付きます。</p>
+          <div class="step-head">
+            <h2><span class="num">09</span>タイトル、本文を作る</h2>
+            <button class="btn btn-ghost" id="btnBlogTitleMore" type="button">別案を生成</button>
+          </div>
+          <div class="field">
+            <label for="blogTitle">ブログのタイトル（「池袋」を入れて25文字以内・句読点や記号なし）</label>
+            <div class="chips" id="blogTitleCands" style="margin-bottom:8px"></div>
+            <input id="blogTitle" class="input" autocomplete="off">
+            <span class="count" id="blogTitleCount"></span>
+          </div>
+          <ul class="warn" id="blogTitleChecks" style="margin-top:8px"></ul>
+          <p class="note" style="margin:4px 0 12px">このタイトルと、上で選んだ季節・テイスト・施術に合わせて本文を作るプロンプトです。本文は1文ごとに改行、絵文字なし、記号は「、」「。」だけ。最後に店舗情報が付きます。</p>
           <div class="actions">
-            <button class="btn btn-primary" id="btnBlogCopy" type="button">ブログ用プロンプトをコピー</button>
+            <button class="btn btn-primary" id="btnBlogCopy" type="button">タイトルと本文のプロンプトをコピー</button>
+            <button class="btn" id="btnBlogTitleCopy" type="button">タイトルだけコピー</button>
             <a class="btn" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT を開く</a>
           </div>
           <details class="prompt-box">
@@ -170,9 +181,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/data.js?v=202610172009"></script>
-  <script src="js/engine.js?v=202610172009"></script>
-  <script src="js/sources.js?v=202610172009"></script>
-  <script src="js/app.js?v=202610172009"></script>
+  <script src="js/data.js?v=202610182003"></script>
+  <script src="js/engine.js?v=202610182003"></script>
+  <script src="js/sources.js?v=202610182003"></script>
+  <script src="js/app.js?v=202610182003"></script>
 </body>
 </html>

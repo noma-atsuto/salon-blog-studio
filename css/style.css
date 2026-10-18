@@ -118,6 +118,7 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .upload-box .consent { border-radius: 8px; align-items: flex-start; line-height: 1.5; text-align: left; }
 .upload-box .consent input { margin-top: 3px; }
 .btn.disabled { opacity: .5; pointer-events: none; }
+.btn.disabled-look { opacity: .55; }
 
 .ftree { display: grid; gap: 8px; margin-top: 10px; }
 .fgroup { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--surface); }

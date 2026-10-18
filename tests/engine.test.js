@@ -196,3 +196,37 @@ test('ブログ本文はコンパクト（350〜450文字・15〜20文）で、�
   assert.ok(p.includes('おすすめのポイントを3つ') && p.includes('押しつけない、来店のお誘い'));
   assert.ok(!p.includes('600〜900'));
 });
+
+test('ブログのタイトル案：全部の組み合わせで「池袋」入り・25文字以内・句読点や記号なし', () => {
+  for (const s of SEASONS) for (const g of D.genres) {
+    for (const subId of g.subs ? g.subs.map((x) => x.id) : [null]) {
+      const st = { ...base, season: s, genreId: g.id, subId };
+      for (const title of E.titleCandidates(D, st)) {
+        for (const r of [0, 1, 2]) {
+          const c = E.blogTitleCandidates(D, st, { title }, r);
+          assert.ok(c.length >= 1, `${s}/${g.id}/${subId}/${title}`);
+          for (const t of c) assert.deepEqual(E.checkBlogTitle(D, t), [], `${t}`);
+        }
+      }
+    }
+  }
+});
+
+test('ブログのタイトルの確認：池袋なし・26文字以上・句読点や記号ありを知らせる', () => {
+  assert.ok(E.checkBlogTitle(D, '秋のミルクブラウン').some((x) => x.includes('池袋')));
+  assert.ok(E.checkBlogTitle(D, '池袋' + 'あ'.repeat(24)).some((x) => x.includes('26文字')));
+  assert.ok(E.checkBlogTitle(D, '池袋、秋のミルクブラウン！').some((x) => x.includes('記号')));
+  assert.ok(E.checkBlogTitle(D, '池袋 秋').some((x) => x.includes('空白')));
+  assert.deepEqual(E.checkBlogTitle(D, '池袋で叶える秋のミルクブラウン'), []);
+});
+
+test('ブログ用プロンプトは、選んだタイトルを1行目にそのまま使う。本文の確認は1行目のタイトルも見る', () => {
+  const texts = { category: '池袋 メンズカラー', catch: 'a', title: 'ミルクブラウン', subtitle: 'b' };
+  const p = E.buildBlogPrompt(D, base, texts, null, '池袋で叶える秋のミルクブラウン');
+  assert.ok(p.includes('ブログのタイトル「池袋で叶える秋のミルクブラウン」を一字一句このまま'));
+  const bad = '池袋、秋のミルクブラウン！\n\n本文です。\n\n' + D.shopFooter;
+  assert.ok(E.checkBlogText(bad, D.shopFooter, D).some((x) => x.startsWith('1行目のタイトルに句読点')));
+  const fixed = E.cleanBlogText(bad, D.shopFooter);
+  assert.equal(fixed.split('\n')[0], '池袋秋のミルクブラウン');
+  assert.deepEqual(E.checkBlogText(fixed, D.shopFooter, D), []);
+});

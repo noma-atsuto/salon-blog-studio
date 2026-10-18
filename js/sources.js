@@ -56,9 +56,26 @@
     no_consent: '利用の許可の確認にチェックしてください',
     upload_limit: '1時間に追加できる枚数（60枚）を超えました。時間をおいてお試しください',
     not_image: '画像（JPEG・PNG・WebP）だけ追加できます',
+    server_error: '写真の追加の準備がまだ終わっていません（管理者が Apps Script で「実行」→「許可」をすると使えるようになります）',
     too_large: '写真が大きすぎます（15MBまで）',
     network: '共有フォルダにつながりませんでした。通信状態か、配る仕組みのURLを確認してください'
   };
+
+  // 写真を、撮ったときの向きのまま読み込む（<img> は写真の向きの情報を反映して表示する）
+  function loadOriented(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = async () => {
+        URL.revokeObjectURL(url);
+        // 読めないときは別の方法で（向きの情報も使う）
+        try { resolve(await createImageBitmap(file, { imageOrientation: 'from-image' })); }
+        catch (e) { reject(Object.assign(new Error('この写真は読み込めませんでした（iPhone の設定「カメラ → フォーマット → 互換性優先」にすると JPEG で保存されます）'), { code: 'decode' })); }
+      };
+      img.src = url;
+    });
+  }
 
   const DriveRelaySource = {
     id: 'gdrive',
@@ -115,14 +132,16 @@
     },
 
     // 写真を1枚追加する。送る前に長い辺2400pxまで縮め、JPEGにする（iPhone の HEIC などもここで変換）
+    // iPhone の写真は「向き」の情報を持っているので、その向きどおり（縦の写真は縦のまま 3:4）に直してから送る
     async upload(folderId, file, uploader) {
-      const bitmap = await createImageBitmap(file).catch(() => null);
-      if (!bitmap) throw Object.assign(new Error('この写真は読み込めませんでした（JPEG・PNG で試してください）'), { code: 'decode' });
-      const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+      const img = await loadOriented(file);
+      const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+      const scale = Math.min(1, 2400 / Math.max(w0, h0));
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      canvas.width = Math.round(w0 * scale);
+      canvas.height = Math.round(h0 * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      if (img.close) img.close();
       const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
       const buf = new Uint8Array(await blob.arrayBuffer());
       let bin = '';

@@ -55,7 +55,8 @@
     customLabel: '', customTitle: '', customNote: '',
     source: 'local'
   }, saved, { imageId: null, source: 'gdrive' }); // 写真は毎回、共有フォルダを開いた状態から始める
-  const ui = { cands: [], selected: 0, round: 0, texts: { category: '', catch: '', title: '', subtitle: '' }, crops: {} };
+  const ui = { cands: [], selected: 0, round: 0, texts: { category: '', catch: '', title: '', subtitle: '' }, crops: {},
+    blogTitle: '', blogTitleAuto: true, blogTitleCands: [], blogTitleRound: 0 };
 
   function saveState() {
     const { imageId, ...rest } = state;
@@ -167,7 +168,9 @@
         <b>このフォルダ（${esc(here ? here.name : '')}）に写真を追加</b>
         <label class="chip consent"><input type="checkbox" id="upConsent"${drive.consent ? ' checked' : ''}>お客様の顔が写っている写真は、AIでの画像づくりとブログに使う許可をもらっています</label>
         <div class="actions">
-          <label class="btn btn-sm ${drive.uploading ? 'disabled' : ''}">写真を選んで追加<input type="file" id="upFile" accept="image/*" multiple hidden ${drive.uploading ? 'disabled' : ''}></label>
+          ${drive.consent && !drive.uploading
+            ? '<label class="btn btn-sm btn-primary">写真を選んで追加<input type="file" id="upFile" accept="image/*" multiple hidden></label>'
+            : `<button type="button" class="btn btn-sm disabled-look" id="upNeedConsent">${drive.uploading ? '追加しています…' : '写真を選んで追加（先に上のチェック）'}</button>`}
           ${drive.uploading ? `<span class="note" style="margin:0">${esc(drive.uploading)}</span>` : `<label class="note" for="upStaff" style="margin:0">投稿者</label>
           <select id="upStaff" class="input" style="width:auto;padding:6px 10px">${settings.staff.map((st) => `<option value="${esc(st.id)}" ${st.id === (drive.uploaderId || state.staffId) ? 'selected' : ''}>${esc(st.name)}</option>`).join('')}</select>`}
         </div>
@@ -317,7 +320,30 @@
     ui.cands = E.generateCandidates(settings, engineState(), ui.round);
     ui.selected = 0;
     ui.texts = Object.assign({}, ui.cands[0]);
+    ui.blogTitleAuto = true; // 施術や季節が変わったら、タイトルも作り直す
+    refreshBlogTitles(true);
     renderCands(); renderFields(); update();
+  }
+  // ブログのタイトル案（「池袋」・25文字以内・句読点や記号なし）
+  function refreshBlogTitles(resetRound) {
+    if (resetRound) ui.blogTitleRound = 0;
+    ui.blogTitleCands = E.blogTitleCandidates(settings, engineState(), ui.texts, ui.blogTitleRound);
+    if (ui.blogTitleAuto) ui.blogTitle = ui.blogTitleCands[0] || '';
+    renderBlogTitle();
+  }
+  function renderBlogTitle() {
+    $('blogTitleCands').innerHTML = ui.blogTitleCands.map((t, i) =>
+      `<button type="button" class="chip ${t === ui.blogTitle ? 'on' : ''}" data-btitle="${i}">${esc(t)}</button>`).join('');
+    if ($('blogTitle').value !== ui.blogTitle) $('blogTitle').value = ui.blogTitle;
+    updateBlogTitleChecks();
+  }
+  function updateBlogTitleChecks() {
+    const n = E.charCount(ui.blogTitle);
+    const max = (settings.blog || {}).titleMax || 25;
+    $('blogTitleCount').textContent = `${n} / ${max}文字`;
+    $('blogTitleCount').classList.toggle('over', n > max);
+    const list = E.checkBlogTitle(settings, ui.blogTitle);
+    $('blogTitleChecks').innerHTML = list.map((x) => `<li>${esc(x)}</li>`).join('');
   }
   function renderCands() {
     $('cands').innerHTML = ui.cands.map((c, i) => `
@@ -386,7 +412,7 @@
   function update() {
     renderPreview();
     $('promptText').textContent = currentPrompt();
-    $('blogPromptText').textContent = E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff());
+    $('blogPromptText').textContent = E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff(), ui.blogTitle);
     const w = E.validate(settings, engineState(), ui.texts);
     $('warnings').innerHTML = w.map((x) => `<li>${esc(x)}</li>`).join('');
     saveState();
@@ -687,7 +713,7 @@
 
   function renderBlogChecks() {
     const v = $('blogInput').value;
-    const list = v.trim() ? E.checkBlogText(v, settings.shopFooter) : [];
+    const list = v.trim() ? E.checkBlogText(v, settings.shopFooter, settings) : [];
     $('blogChecks').innerHTML = v.trim()
       ? (list.length ? list.map((x) => `<li>${esc(x)}</li>`).join('') : '<li class="ok">ルールどおりです（内容は公開前に必ず読んで確かめてください）</li>')
       : '';
@@ -705,6 +731,7 @@
     if (d.dpick) { drivePick(d.dpick); return; }
     if (d.folder) { drive.path.push({ id: d.folder, name: d.folderName }); drive.list = null; openFolder(); return; }
     if (d.crumb) { drive.path = drive.path.slice(0, Number(d.crumb) + 1); drive.list = null; openFolder(); return; }
+    if (t.id === 'upNeedConsent') { toast(drive.uploading ? '追加が終わるまでお待ちください' : '先に「許可をもらっています」にチェックを入れてください'); return; }
     if (t.id === 'btnDriveIn') { driveUnlock(); return; }
     if (t.id === 'btnDriveRetry') { drive.error = ''; drive.list = null; renderDrive(); return; }
     if (t.id === 'btnDriveOut') { SRC.byId.gdrive.setPasscode(''); store.set('sbs.drivePass', ''); drive.list = null; drive.path = []; renderDrive(); toast('この端末の合言葉を消しました'); return; }
@@ -721,7 +748,7 @@
       renderGenres(); renderColors(); regen(); return;
     }
     if (d.color) { state.hairColor = d.color; renderColors(); regen(); return; }
-    if (d.cand) { ui.selected = Number(d.cand); ui.texts = Object.assign({}, ui.cands[ui.selected]); renderCands(); renderFields(); update(); return; }
+    if (d.cand) { ui.selected = Number(d.cand); ui.texts = Object.assign({}, ui.cands[ui.selected]); refreshBlogTitles(true); renderCands(); renderFields(); update(); return; }
 
     if (t.id === 'btnStylesReload') { styleStats.data = null; styleStats.error = ''; loadStyleStats(); return; }
     if (t.id === 'btnMenu') { setMenu(!$('sidebar').classList.contains('open')); return; }
@@ -735,9 +762,18 @@
       return;
     }
     if (t.id === 'btnBlogCopy') {
-      const ok = await copyText(E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff()));
+      const tp = E.checkBlogTitle(settings, ui.blogTitle);
+      if (tp.length) { toast(`タイトルを直してください：${tp[0]}`); return; }
+      const ok = await copyText(E.buildBlogPrompt(settings, engineState(), ui.texts, currentStaff(), ui.blogTitle));
       toast(ok ? 'コピーしました。ChatGPT に貼り付けて送信してください' : 'コピーできませんでした。「中身を見る」から手で選んでコピーしてください');
       return;
+    }
+    if (t.id === 'btnBlogTitleMore') { ui.blogTitleRound += 1; ui.blogTitleAuto = true; refreshBlogTitles(false); update(); toast('タイトルの別案を作りました'); return; }
+    if (d.btitle) { ui.blogTitle = ui.blogTitleCands[Number(d.btitle)] || ''; ui.blogTitleAuto = false; renderBlogTitle(); update(); return; }
+    if (t.id === 'btnBlogTitleCopy') {
+      const tp = E.checkBlogTitle(settings, ui.blogTitle);
+      if (tp.length) { toast(`タイトルを直してください：${tp[0]}`); return; }
+      toast((await copyText(ui.blogTitle)) ? 'タイトルをコピーしました' : 'コピーできませんでした'); return;
     }
     if (t.id === 'btnBlogFix') {
       const v = $('blogInput').value;
@@ -774,7 +810,7 @@
       Object.assign(state, { season: h.season, tone: h.tone || settings.seasons[h.season].defaultTone, staffId: h.staffId, genreId: h.genreId, subId: h.subId, hairColor: h.hairColor, customLabel: h.customLabel || '', customTitle: h.customTitle || '', customNote: h.customNote || '' });
       state.imageId = h.imageId && SRC.get(h.imageId) ? h.imageId : null;
       renderAll();
-      ui.cands = E.generateCandidates(settings, engineState(), 0); ui.selected = -1; ui.texts = Object.assign({}, h.texts);
+      ui.cands = E.generateCandidates(settings, engineState(), 0); ui.selected = -1; ui.texts = Object.assign({}, h.texts); ui.blogTitleAuto = true; refreshBlogTitles(true);
       renderCands(); renderFields(); update();
       location.hash = '#create';
       toast(state.imageId ? '履歴の内容を読み込みました' : '履歴を読み込みました。写真はもう一度選んでください');
@@ -882,7 +918,7 @@
 
   document.addEventListener('input', (e) => {
     const t = e.target;
-    if (t.dataset.field) { ui.texts[t.dataset.field] = t.value; ui.selected = -1; updateCounts(); renderCands(); update(); return; }
+    if (t.dataset.field) { ui.texts[t.dataset.field] = t.value; ui.selected = -1; updateCounts(); renderCands(); if (t.dataset.field === 'title') refreshBlogTitles(true); update(); return; }
     if (t.dataset.custom) {
       state[t.dataset.custom] = t.value;
       ui.cands = E.generateCandidates(settings, engineState(), ui.round);
@@ -891,6 +927,7 @@
       renderCands(); update(); return;
     }
     if (t.id === 'blogInput') { renderBlogChecks(); return; }
+    if (t.id === 'blogTitle') { ui.blogTitle = t.value; ui.blogTitleAuto = false; renderBlogTitle(); update(); return; }
     if (t.dataset.crop) {
       const img = currentImage(); if (!img) return;
       const c = ui.crops[img.id] || (ui.crops[img.id] = { x: 50, y: 50, z: 100 });
@@ -903,7 +940,7 @@
   document.addEventListener('change', (e) => {
     const t = e.target;
     if (t.id === 'staffSelect') { state.staffId = t.value; update(); return; }
-    if (t.id === 'upConsent') { drive.consent = t.checked; return; }
+    if (t.id === 'upConsent') { drive.consent = t.checked; renderDrive(); return; }
     if (t.id === 'upStaff') { drive.uploaderId = t.value; return; }
     if (t.id === 'upFile' && t.files.length) { const fs = [...t.files]; t.value = ''; driveUpload(fs); return; }
     if (t.id === 'configFile' && t.files[0]) { importStaff(t.files[0], true); t.value = ''; return; }

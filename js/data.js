@@ -9,7 +9,7 @@
 
     // ブログ本文の最後に、一字一句そのまま付ける店舗情報（管理画面で変更できます）
     shopFooter: "AI TOKYO men\'s 池袋店\n【アイトーキョー】\n東京都豊島区東池袋1丁目8-12\nDKY12池袋ビル5F\n＜アクセス＞池袋駅東口徒歩5分\n＜営業時間＞平日11:00～20:00\n土日祝10:00～19:00\n＜定休日＞なし\n＜当日予約OK＞\nネット予約が取れない場合はお電話でお問い合わせください\nKTEL＞03-5985-4271\n［池袋/池袋駅/AITOKYO/アイトーキョー/波巻きツイスト/スパイラル/波巻きパーマ/ツイスト/ツイストスパイラル/ニュアンスサーフ/サーフフェザー/フェザーパーマ/シャドウパーマ/ツイストシャドウ/メンズパーマ/ラルフカール/フェザーショート/サーフカール/眉毛カット/スペインカール/学割クーポン］",
-    blog: { minChars: 350, maxChars: 450, minSentences: 15, maxSentences: 20, titleMax: 30 },
+    blog: { minChars: 350, maxChars: 450, minSentences: 15, maxSentences: 20, titleMax: 25, titleWord: '池袋' },
 
     // 共有画像フォルダ（gas/Code.gs を公開したURL）。オーナーの判断で、設定なし・合言葉なしで使える形にしている
     drive: { endpoint: 'https://script.google.com/macros/s/AKfycbyvqC2cj2Xyz3EU6w_txfWKSm73zRDG1VQDOywavDxvJSrPcCn5YgPaQFzuk4Ld_d_VYw/exec', rootName: '店舗写真（スタッフ共用）',

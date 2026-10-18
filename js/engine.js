@@ -295,10 +295,52 @@
     return lines;
   }
 
+  // ---- ブログのタイトル ----
+  // タイトルに使ってよい文字：文字と数字と長音「ー」だけ（句読点・記号・空白は使わない）
+  const TITLE_ALLOWED = /[\p{L}\p{N}ー]/u;
+  const cleanTitleText = (t) => [...String(t || '')].filter((ch) => TITLE_ALLOWED.test(ch)).join('');
+  function blogRules(settings) {
+    return Object.assign({ minChars: 350, maxChars: 450, minSentences: 15, maxSentences: 20, titleMax: 25, titleWord: '池袋' }, settings.blog);
+  }
+  // ルール（「池袋」を入れる・25文字以内・句読点や記号なし）に合うか
+  function checkBlogTitle(settings, title) {
+    const b = blogRules(settings);
+    const t = String(title || '');
+    const problems = [];
+    if (!t) problems.push('タイトルが空です');
+    if (t && !t.includes(b.titleWord)) problems.push(`タイトルに「${b.titleWord}」が入っていません`);
+    if (charCount(t) > b.titleMax) problems.push(`タイトルが${charCount(t)}文字です（${b.titleMax}文字以内）`);
+    const bad = [...new Set([...t].filter((ch) => !TITLE_ALLOWED.test(ch)))];
+    if (bad.length) problems.push(`タイトルに句読点・記号・空白があります：${bad.map((c) => (c.trim() ? c : '空白')).join(' ')}`);
+    return problems;
+  }
+  // タイトル案を3つ作る（ルールに合うものだけ）
+  function blogTitleCandidates(settings, state, texts, round, count) {
+    count = count || 3;
+    const b = blogRules(settings);
+    const season = settings.seasons[state.season].label;
+    const g = findGenre(settings, state.genreId);
+    const sub = findSub(g, state.subId);
+    const T = cleanTitleText(texts.title);
+    const genre = cleanTitleText(g.id === 'custom' ? (state.customLabel || '') : (sub && sub.category) || g.label);
+    const area = b.titleWord;
+    const patterns = [
+      `${area}で人気の${T}`, `${season}に似合う${T}なら${area}`, `${area}で叶える${season}の${T}`,
+      `大人の${T}なら${area}`, `${area}で${season}らしい${T}に`, `${area}で${season}の${T}を楽しむ`,
+      `${area}の${genre}で${T}`, `${area}で始める${T}`, `${area}発${season}の${T}`
+    ];
+    const ok = uniq(patterns.map(cleanTitleText)).filter((t) => checkBlogTitle(settings, t).length === 0);
+    const rand = rng(hashStr([state.season, g.id, sub ? sub.id : '', T, round || 0].join('|')));
+    const list = shuffled(ok, rand);
+    if (!list.length) list.push(cleanTitleText(`${area}${T}`).slice(0, b.titleMax));
+    return list.slice(0, count);
+  }
+
   // ChatGPT に貼り付ける、ブログ本文づくりの依頼文
-  function buildBlogPrompt(settings, state, texts, staff) {
+  function buildBlogPrompt(settings, state, texts, staff, blogTitle) {
     const season = settings.seasons[state.season];
-    const b = Object.assign({ minChars: 350, maxChars: 450, minSentences: 15, maxSentences: 20, titleMax: 30 }, settings.blog);
+    const b = blogRules(settings);
+    const title = cleanTitleText(blogTitle);
     return [
       '# ホットペッパービューティーのブログ本文の作成依頼',
       '',
@@ -340,7 +382,9 @@
       '・ほかのお店や人を下げる表現は使わない。',
       '',
       '## 5. 出力の形',
-      `・1行目：ブログのタイトル（「${texts.title}」を入れて${b.titleMax}文字以内。記号は使わない）`,
+      title
+        ? `・1行目：ブログのタイトル「${title}」を一字一句このまま書く（変えない・付け足さない）`
+        : `・1行目：ブログのタイトル（「${b.titleWord}」と「${texts.title}」を入れる。${b.titleMax}文字以内を厳守。句読点・記号・空白は使わない）`,
       '・2行目：空行',
       '・3行目から：本文',
       '・本文のあとに空行を1行入れ、次の店舗情報を一字一句そのまま最後に付ける（店舗情報の中の記号や改行は変えない）。',
@@ -362,7 +406,7 @@
   }
 
   // 生成された本文がルールどおりか調べる
-  function checkBlogText(text, footer) {
+  function checkBlogText(text, footer, settings) {
     const { body, footer: f } = splitFooter(text, footer);
     const problems = [];
     const bad = [...new Set([...body].filter((ch) => !BLOG_ALLOWED.test(ch)))];
@@ -370,6 +414,8 @@
     const multi = body.split('\n').filter((l) => /[。！？!?]\s*\S/.test(l));
     if (multi.length) problems.push(`1行に2つ以上の文がある行が${multi.length}か所あります`);
     if (!f || f !== String(footer || '').trim()) problems.push('最後の店舗情報が、元の文章と一字一句同じになっていません');
+    const first = body.split('\n').map((l) => l.trim()).find(Boolean);
+    if (first && settings) problems.push(...checkBlogTitle(settings, first).map((x) => `1行目の${x}`));
     return problems;
   }
 
@@ -382,7 +428,7 @@
       l = [...l].filter((ch) => BLOG_ALLOWED.test(ch)).join('').replace(/[ \t　]+/g, (m) => m[0]).trim();
       if (!l) { lines.push(''); continue; }
       // 1行目はタイトル。分けず、終わりの「。」も付けない
-      if (!lines.some((x) => x)) { lines.push(l.replace(/。+$/, '')); continue; }
+      if (!lines.some((x) => x)) { lines.push(cleanTitleText(raw)); continue; }
       // 本文は1文ごとに改行し、文の終わりに「。」を付ける
       const parts = l.replace(/。+/g, '。').split(/(?<=。)/).map((x) => x.trim()).filter(Boolean);
       lines.push(...parts.map((x) => (x.endsWith('。') ? x : `${x}。`)));
@@ -406,7 +452,7 @@
   const api = {
     MAX_CHARS, charCount, findGenre, findSub, findHairColor, colorsFor, paletteOf, categoryText, titleCandidates,
     titleLines, subtitleParts, categoryParts,
-    generateCandidates, validate, buildPrompt, buildBlogPrompt, checkBlogText, cleanBlogText, contrastRatio
+    generateCandidates, validate, buildPrompt, buildBlogPrompt, blogTitleCandidates, checkBlogTitle, checkBlogText, cleanBlogText, contrastRatio
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SBS_ENGINE = api;
