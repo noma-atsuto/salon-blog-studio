@@ -177,7 +177,8 @@
       }).join('');
       inner = (folders.length ? `<div class="ftree">${tree}</div>` : '')
         + (images.length ? `<div class="gallery">${images.map((it) => thumbCard(it, state.imageId === it.id,
-          `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`)).join('')}</div>`
+          `<button type="button" class="btn btn-sm ${state.imageId === it.id ? 'btn-primary' : ''}" data-dpick="${esc(it.id)}" ${drive.picking === it.id ? 'disabled' : ''}>${drive.picking === it.id ? '読み込み中…' : state.imageId === it.id ? '選択中' : '選択'}</button>`
+          + (it.app ? `<button type="button" class="link del" data-dtrash="${esc(it.id)}" ${drive.trashing === it.id ? 'disabled' : ''}>${drive.trashing === it.id ? '消しています…' : 'この写真を消す'}</button>` : ''))).join('')}</div>`
           : folders.length ? '' : '<p class="empty">このフォルダには写真がありません。</p>');
     }
     const here = drive.path[drive.path.length - 1];
@@ -264,6 +265,23 @@
     }
     drive.uploading = ''; drive.list = null; drive.consent = false;
     toast(ng ? `${ok}枚追加しました。${ng}枚は追加できませんでした（${lastErr}）` : `${ok}枚追加しました`);
+    renderDrive();
+  }
+
+  // まちがえて追加した写真を消す（ドライブのゴミ箱へ。30日以内なら戻せる）
+  async function driveTrash(id) {
+    const img = drive.list && drive.list.images.find((x) => x.id === id);
+    if (!img) return;
+    if (!confirm(`「${img.name}」を消しますか？\nドライブのゴミ箱に移ります（30日以内なら、ドライブのゴミ箱から元に戻せます）。`)) return;
+    const by = (settings.staff.find((st) => st.id === (drive.uploaderId || state.staffId)) || {}).name || '不明';
+    drive.trashing = id; renderDrive();
+    try {
+      await SRC.byId.gdrive.trash(img, by);
+      if (state.imageId === id) { state.imageId = null; update(); }
+      drive.list = null; styleStats.data = null;
+      toast('写真を消しました（ドライブのゴミ箱に移しました）');
+    } catch (e) { toast(driveError(e)); }
+    drive.trashing = '';
     renderDrive();
   }
 
@@ -756,6 +774,7 @@
     if (d.src) { state.source = d.src; renderSource(); return; }
     if (d.pick) { state.imageId = d.pick; renderSource(); update(); return; }
     if (d.dpick) { drivePick(d.dpick); return; }
+    if (d.dtrash) { driveTrash(d.dtrash); return; }
     if (d.folder) { drive.path.push({ id: d.folder, name: d.folderName }); drive.list = null; openFolder(); return; }
     if (d.crumb) { drive.path = drive.path.slice(0, Number(d.crumb) + 1); drive.list = null; openFolder(); return; }
     if (t.id === 'upNeedConsent') { toast(drive.uploading ? '追加が終わるまでお待ちください' : '先に「許可をもらっています」にチェックを入れてください'); return; }

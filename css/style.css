@@ -104,6 +104,7 @@ textarea.input { min-height: 120px; resize: vertical; line-height: 1.6; }
 .thumb .meta { padding: 6px 8px; font-size: 11px; color: var(--ink-3); line-height: 1.45; }
 .thumb .meta b { display: block; color: var(--ink-2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thumb button { margin: 0 8px 8px; }
+.thumb .link.del { color: var(--warn); font-size: 12px; margin: -2px 8px 10px; text-align: center; }
 .img-error { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; font-size: 11px; color: var(--ink-3); background: var(--greige-soft); }
 .empty { color: var(--ink-3); font-size: 13px; padding: 10px 0 0; }
 

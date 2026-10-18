@@ -6,7 +6,8 @@
  * ・合言葉はこのファイルに書かず、「プロジェクトの設定 → スクリプト プロパティ」の PASSCODE に入れます
  *   （PASSCODE を消すと合言葉なしで使える。もう一度入れると合言葉が必要に戻る）
  * ・合言葉を1時間に10回まちがえると、1時間すべて止めます（4桁の合言葉でも当てられにくくするため）
- * ・写真の追加（upload）だけでき、変更・削除はしません
+ * ・写真の追加（upload）と、アプリから追加した写真をゴミ箱に移す（trash）ことができます。そのほかの変更はしません
+ * ・ゴミ箱に移せるのは「アプリから追加」の写真だけ・1時間に30枚まで。30日以内ならドライブのゴミ箱から戻せます
  * ・追加できるのはフォルダの中・画像だけ・1枚10MBまで・1時間に60枚まで。利用許可の確認が必要です
  */
 const ROOT_ID = '1fxp-ECPTHG2UjGXpU7n00r6ATXIkNeAR'; // 店舗写真（スタッフ共用）
@@ -14,6 +15,7 @@ const MAX_BYTES = 15 * 1024 * 1024; // 1枚 15MB まで
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 追加は1枚 10MB まで
 const MAX_UPLOADS_PER_HOUR = 60;
 const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_TRASH_PER_HOUR = 30;
 const MAX_FAILS = 10;
 const LOCK_SECONDS = 3600;
 
@@ -30,6 +32,7 @@ function doPost(e) {
     else if (req.action === 'thumb') out = thumb_(req.id);
     else if (req.action === 'image') out = image_(req.id);
     else if (req.action === 'upload') out = upload_(req);
+    else if (req.action === 'trash') out = trash_(req);
     else throw err_('bad_request');
     return json_(Object.assign({ ok: true }, out));
   } catch (x) {
@@ -97,7 +100,7 @@ function list_(folderId) {
     const m = String(f.getDescription() || '').match(/投稿者:\s*([^\n／]+)/);
     if (m) owner = m[1].trim();
     else { try { owner = f.getOwner() ? f.getOwner().getName() : ''; } catch (x) { owner = ''; } }
-    images.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().toISOString(), owner: owner });
+    images.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().toISOString(), owner: owner, app: isAppUpload_(f) });
   }
   const byName = function (a, b) { return a.name.localeCompare(b.name, 'ja'); };
   folders.sort(byName); images.sort(byName);
@@ -141,6 +144,23 @@ function upload_(req) {
   const uploader = String(req.uploader || '不明').replace(/[\r\n／]+/g, ' ').slice(0, 40);
   file.setDescription('投稿者: ' + uploader + '／利用許可: 確認済み（アプリから追加）／登録: ' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm'));
   return { file: { id: file.getId(), name: file.getName() } };
+}
+
+// アプリから追加した写真か（説明欄の印で見分ける）
+function isAppUpload_(file) { return /アプリから追加/.test(String(file.getDescription() || '')); }
+
+// まちがえて追加した写真を、ゴミ箱に移す（アプリから追加した写真だけ。30日以内なら戻せる）
+function trash_(req) {
+  const file = safeFile_(req.id);
+  if (!isAppUpload_(file)) throw err_('not_app_upload');
+  const cache = CacheService.getScriptCache();
+  const count = Number(cache.get('trashes') || 0);
+  if (count >= MAX_TRASH_PER_HOUR) throw err_('trash_limit');
+  cache.put('trashes', String(count + 1), 3600);
+  const by = String(req.by || '不明').replace(/[\r\n／]+/g, ' ').slice(0, 40);
+  file.setDescription(file.getDescription() + '／削除: ' + by + '（' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm') + '）');
+  file.setTrashed(true);
+  return { trashed: file.getId() };
 }
 
 function err_(code) { const e = new Error(code); e.code = code; return e; }

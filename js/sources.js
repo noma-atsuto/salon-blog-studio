@@ -56,6 +56,8 @@
     no_consent: '利用の許可の確認にチェックしてください',
     upload_limit: '1時間に追加できる枚数（60枚）を超えました。時間をおいてお試しください',
     not_image: '画像（JPEG・PNG・WebP）だけ追加できます',
+    not_app_upload: 'この写真はドライブに直接入れたものなので、アプリからは消せません',
+    trash_limit: '1時間に消せる枚数（30枚）を超えました。時間をおいてお試しください',
     server_error: '写真の追加の準備がまだ終わっていません（管理者が Apps Script で「実行」→「許可」をすると使えるようになります）',
     too_large: '写真が大きすぎます（15MBまで）',
     network: '共有フォルダにつながりませんでした。通信状態か、配る仕組みのURLを確認してください'
@@ -117,7 +119,7 @@
         folders: data.folders,
         images: data.images.map((f) => ({
           fileId: f.id, id: `gdrive:${f.id}`, name: f.name, thumb: this.thumbs.get(f.id) || '',
-          date: fmtDate(f.created), dateLabel: '登録日', uploader: f.owner || '—'
+          date: fmtDate(f.created), dateLabel: '登録日', uploader: f.owner || '—', app: Boolean(f.app)
         }))
       };
     },
@@ -148,6 +150,13 @@
       for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
       const d = await this.call({ action: 'upload', folder: folderId, name: file.name, mime: 'image/jpeg', data: btoa(bin), uploader, consent: true });
       return d.file;
+    },
+
+    // まちがえて追加した写真を、ドライブのゴミ箱に移す（アプリから追加した写真だけ）
+    async trash(img, by) {
+      await this.call({ action: 'trash', id: img.fileId, by });
+      this.thumbs.delete(img.fileId);
+      registry.delete(img.id);
     },
 
     // 選んだ写真の本体（ブラウザの中だけで使う）

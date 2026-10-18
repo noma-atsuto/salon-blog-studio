@@ -36,9 +36,10 @@ function fileObj(id) {
   const f = files[id];
   if (!f) throw new Error('no file');
   return {
-    getId: () => id, getName: () => f.name, getMimeType: () => f.mime, getSize: () => f.size, isTrashed: () => false,
+    getId: () => id, getName: () => f.name, getMimeType: () => f.mime, getSize: () => f.size,
     getDateCreated: () => new Date('2026-10-12T00:00:00Z'), getOwner: () => ({ getName: () => 'オーナー' }),
     getDescription: () => f.desc || '', setDescription: (d) => { f.desc = d; },
+    setTrashed: (v) => { f.trashed = v; }, isTrashed: () => Boolean(f.trashed),
     getParents: () => iter(f.parents.map(folderObj)), getThumbnail: () => blob('image/png'), getBlob: () => blob(f.mime)
   };
 }
@@ -133,4 +134,31 @@ test('写真の追加：1時間に60枚まで', () => {
   const req = { key: 'k', action: 'upload', folder: ROOT, name: 'a.jpg', mime: 'image/png', data: Buffer.from('y').toString('base64'), uploader: 'A', consent: true };
   for (let i = 0; i < 60; i++) assert.ok(call(req).ok);
   assert.equal(call(req).error, 'upload_limit');
+});
+
+test('写真の削除：アプリから追加した写真だけゴミ箱に移す。記録が残り、一覧から消える', () => {
+  const call = load(null);
+  const up = call({ action: 'upload', folder: 'HAIR', name: 'm.jpg', mime: 'image/jpeg', data: Buffer.from('z').toString('base64'), uploader: 'A', consent: true });
+  assert.ok(call({ action: 'list', folder: 'HAIR' }).images.find((x) => x.id === up.file.id).app);
+  const r = call({ action: 'trash', id: up.file.id, by: 'スタイリストA' });
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.ok(files[up.file.id].trashed);
+  assert.match(files[up.file.id].desc, /削除: スタイリストA/);
+  assert.ok(!call({ action: 'list', folder: 'HAIR' }).images.some((x) => x.id === up.file.id));
+});
+
+test('写真の削除：ドライブに直接入れた写真・フォルダの外・画像以外は消せない', () => {
+  const call = load(null);
+  assert.equal(call({ action: 'trash', id: 'photo1' }).error, 'not_app_upload');
+  assert.equal(call({ action: 'trash', id: 'secret' }).error, 'forbidden');
+  assert.equal(call({ action: 'trash', id: 'memo' }).error, 'not_image');
+  assert.ok(!files.photo1.trashed && !files.secret.trashed);
+});
+
+test('写真の削除：1時間に30枚まで', () => {
+  const call = load(null);
+  const ids = [];
+  for (let i = 0; i < 31; i++) ids.push(call({ action: 'upload', folder: ROOT, name: 'x.jpg', mime: 'image/png', data: Buffer.from('q').toString('base64'), uploader: 'A', consent: true }).file.id);
+  for (let i = 0; i < 30; i++) assert.ok(call({ action: 'trash', id: ids[i] }).ok);
+  assert.equal(call({ action: 'trash', id: ids[30] }).error, 'trash_limit');
 });
