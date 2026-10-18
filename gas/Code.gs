@@ -33,7 +33,9 @@ function doPost(e) {
     else throw err_('bad_request');
     return json_(Object.assign({ ok: true }, out));
   } catch (x) {
-    return json_({ ok: false, error: x.code || 'server_error' });
+    // 想定外のエラーは記録し、原因が分かるよう短い説明も返す
+    if (!x.code) console.error(x);
+    return json_({ ok: false, error: x.code || 'server_error', detail: x.code ? undefined : String((x && x.message) || x).slice(0, 200) });
   }
 }
 
@@ -144,4 +146,11 @@ function upload_(req) {
 function err_(code) { const e = new Error(code); e.code = code; return e; }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// 書き込みの許可を確かめる（エディタから1回だけ実行する。フォルダの説明を同じ内容で書き直すだけで、中身は変えない）
+function checkWritePermission() {
+  const folder = DriveApp.getFolderById(ROOT_ID);
+  folder.setDescription(folder.getDescription() || '');
+  return 'ok';
 }
