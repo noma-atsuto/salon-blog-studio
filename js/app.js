@@ -51,7 +51,7 @@
   const state = Object.assign({
     season: startSeason, tone: settings.seasons[startSeason].defaultTone,
     staffId: settings.staff[0] ? settings.staff[0].id : null,
-    genreId: 'color', subId: null, hairColor: 'auto',
+    genreId: 'color', subId: null, hairColor: 'auto', backdrop: 'auto',
     customLabel: '', customTitle: '', customNote: '',
     source: 'local'
   }, saved, { imageId: null, source: 'gdrive' }); // 写真は毎回、共有フォルダを開いた状態から始める
@@ -64,7 +64,25 @@
   }
   function currentImage() { return state.imageId ? SRC.get(state.imageId) : null; }
   function currentStaff() { return settings.staff.find((s) => s.id === state.staffId) || null; }
-  function engineState() { const img = currentImage(); return Object.assign({}, state, { image: img ? { id: img.id, name: img.name } : null }); }
+  // 背景のテイスト。「おまかせ」は、プロンプトをコピーするたびに次の背景へ順番に切り替える
+  function backdropList() { return settings.seasons[state.season].backdrops || []; }
+  function resolvedBackdrop() {
+    const list = backdropList();
+    if (state.backdrop !== 'auto') return list.find((b) => b.id === state.backdrop) || list[0];
+    const turn = store.get('sbs.bgTurn', {})[state.season] || 0;
+    return list[turn % list.length];
+  }
+  function nextBackdropTurn() {
+    if (state.backdrop !== 'auto') return;
+    const t = store.get('sbs.bgTurn', {});
+    t[state.season] = (t[state.season] || 0) + 1;
+    store.set('sbs.bgTurn', t);
+  }
+  function engineState() {
+    const img = currentImage();
+    const bd = resolvedBackdrop();
+    return Object.assign({}, state, { image: img ? { id: img.id, name: img.name } : null, backdrop: bd ? bd.id : null });
+  }
 
   // ---- 通知 ----
   let toastTimer;
@@ -277,6 +295,15 @@
     const def = settings.seasons[state.season].defaultTone;
     $('toneTabs').innerHTML = Object.entries(settings.tones).map(([id, label]) =>
       `<button type="button" data-tone="${id}" class="${state.tone === id ? 'on' : ''}">${label}${id === def ? '（おすすめ）' : ''}</button>`).join('');
+    renderBackdrops();
+  }
+  function renderBackdrops() {
+    const list = backdropList();
+    if (state.backdrop !== 'auto' && !list.some((b) => b.id === state.backdrop)) state.backdrop = 'auto';
+    $('backdropChips').innerHTML = `<button type="button" class="chip ${state.backdrop === 'auto' ? 'on' : ''}" data-backdrop="auto">おまかせ（毎回ちがう背景）</button>`
+      + list.map((b) => `<button type="button" class="chip ${state.backdrop === b.id ? 'on' : ''}" data-backdrop="${esc(b.id)}">${esc(b.label)}</button>`).join('');
+    const bd = resolvedBackdrop();
+    $('backdropNow').textContent = bd ? `今回の背景：${bd.label}（${bd.scene.split('。')[0]}）` : '';
   }
   function renderStaff() {
     const sel = $('staffSelect');
@@ -737,6 +764,7 @@
     if (t.id === 'btnDriveOut') { SRC.byId.gdrive.setPasscode(''); store.set('sbs.drivePass', ''); drive.list = null; drive.path = []; renderDrive(); toast('この端末の合言葉を消しました'); return; }
     if (d.season) { state.season = d.season; state.tone = settings.seasons[d.season].defaultTone; renderSeasons(); renderColors(); regen(); return; }
     if (d.tone) { state.tone = d.tone; renderSeasons(); renderColors(); regen(); return; }
+    if (d.backdrop) { state.backdrop = d.backdrop; renderBackdrops(); update(); return; }
     if (d.genre) {
       state.genreId = d.genre; state.subId = null;
       state.hairColor = E.findGenre(settings, d.genre).group === 'color' ? 'auto' : 'keep';
@@ -758,7 +786,10 @@
       const ok = await copyText(prompt);
       if (!ok) { toast('コピーできませんでした。「プロンプトの中身を見る」から手で選んでコピーしてください'); return; }
       addHistory(prompt);
-      toast(currentImage() ? 'コピーしました。ChatGPT に写真を添付して貼り付けてください' : 'コピーしました（写真がまだ選ばれていません）');
+      const wasAuto = state.backdrop === 'auto';
+      nextBackdropTurn();
+      if (wasAuto) { renderBackdrops(); update(); }
+      toast((currentImage() ? 'コピーしました。ChatGPT に写真を添付して貼り付けてください' : 'コピーしました（写真がまだ選ばれていません）') + (wasAuto ? '。次は別の背景になります' : ''));
       return;
     }
     if (t.id === 'btnBlogCopy') {

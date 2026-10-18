@@ -57,6 +57,11 @@
     }
     return null;
   }
+  // 背景のテイスト（state.backdrop が見つからなければ、その季節の1つ目）
+  function findBackdrop(settings, state) {
+    const list = settings.seasons[state.season].backdrops || [];
+    return list.find((x) => x.id === state.backdrop) || list[0];
+  }
   function paletteOf(settings, state) {
     const s = settings.seasons[state.season];
     return s.palettes[state.tone] || s.palettes[s.defaultTone];
@@ -205,6 +210,7 @@
     const cp = categoryParts(texts.category);
     const seasonChar = String(texts.catch || '').includes(season.label) ? season.label : '';
     const haze = season.background[state.tone] || season.background[season.defaultTone];
+    const bd = findBackdrop(settings, state);
 
     return [
       '# 美容室ブログ用アイキャッチ画像の作成依頼',
@@ -216,7 +222,7 @@
       '・横長 4:3（目標 1200×900px）。',
       '・写真と文字を左右で区切らず、1枚の写真として画面全体を自然につなげる。',
       '・人物は左側 約55% に、胸から上を大きく配置する。顔がはっきり見えるよう、顔の高さは画面の3分の1ほど。少し斜めを向き、視線はカメラへ。',
-      `・人物の後ろ（左側）の背景：${season.scene}。ひと目で${season.label}だと分かる景色にする。`,
+      `・人物の後ろ（左側）の背景：${bd.scene}。ひと目で${season.label}だと分かる景色にする。`,
       '・背景は写真らしくやわらかくぼかし（浅い被写界深度）、ピントは人物に合わせる。背景の色が髪や顔に映り込みすぎないようにする。',
       '・時間帯は昼（日中）。屋外の自然な日差しで撮った写真にし、夕方や夜の雰囲気にはしない。',
       '・同じ景色が右側まで一続きにつながるようにする。',
@@ -231,9 +237,9 @@
       '## 3. 髪について',
       hairInstruction(settings, state, texts),
       '',
-      `## 4. 季節の演出（${season.label}）`,
+      `## 4. 季節の演出（${season.label}・背景のテイスト：${bd.label}）`,
       `・光：${season.light}。`,
-      `・季節の飾り：${season.decor}。`,
+      `・季節の飾り：${bd.decor}。`,
       '・飾りは画面のまわりだけに置き、人物の顔と文字には重ねない。',
       `・全体の色のテイスト：${settings.toneStyles[state.tone] || ''}。`,
       '',
@@ -273,7 +279,7 @@
       '',
       '---',
       '（管理用メモ・画像には入れないでください）',
-      `施術ジャンル：${genreName}／季節：${season.label}／テイスト：${settings.tones[state.tone] || ''}／投稿者：${staff ? staff.name : '未選択'}`
+      `施術ジャンル：${genreName}／季節：${season.label}／テイスト：${settings.tones[state.tone] || ''}／背景：${bd.label}／投稿者：${staff ? staff.name : '未選択'}`
     ].join('\n');
   }
 
@@ -478,7 +484,7 @@
   }
 
   const api = {
-    MAX_CHARS, charCount, findGenre, findSub, findHairColor, colorsFor, paletteOf, categoryText, titleCandidates,
+    MAX_CHARS, charCount, findGenre, findSub, findHairColor, colorsFor, paletteOf, findBackdrop, categoryText, titleCandidates,
     titleLines, subtitleParts, categoryParts,
     generateCandidates, validate, buildPrompt, buildBlogPrompt, blogTitleCandidates, checkBlogTitle, checkBlogText, cleanBlogText, contrastRatio
   };

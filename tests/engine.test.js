@@ -170,17 +170,17 @@ test('画像の文字デザイン：タイトルは2行、カテゴリーは2つ
   assert.deepEqual(E.categoryParts('池袋 メンズカラー'), { area: '池袋', label: 'メンズカラー' });
   const texts = { category: '池袋 メンズカラー', catch: '秋の抜け感をつくる', title: 'ミルクブラウン', subtitle: '大人のモテカラー' };
   const p = E.buildPrompt(D, { ...base, hairColor: 'ミルクブラウン' }, texts, null);
-  for (const must of ['1枚の写真として画面全体を自然につなげる', '約55%', '約45%', '「池袋」', '「メンズカラー」', '1行目「ミルク」、2行目「ブラウン」', '季節の字「秋」', '「モテカラー」だけアクセント色', '細い横線を2本', D.seasons.autumn.decor, D.seasons.autumn.scene]) assert.ok(p.includes(must), must);
+  for (const must of ['1枚の写真として画面全体を自然につなげる', '約55%', '約45%', '「池袋」', '「メンズカラー」', '1行目「ミルク」、2行目「ブラウン」', '季節の字「秋」', '「モテカラー」だけアクセント色', '細い横線を2本', D.seasons.autumn.backdrops[0].decor, D.seasons.autumn.backdrops[0].scene]) assert.ok(p.includes(must), must);
 });
 
 test('人物の後ろの背景に、季節の景色の指示が入る（4季節とも）', () => {
   const texts = { category: '池袋 メンズカラー', catch: 'a', title: 'b', subtitle: 'c' };
   for (const s of SEASONS) {
     const p = E.buildPrompt(D, { ...base, season: s }, texts, null);
-    assert.ok(p.includes('人物の後ろ（左側）の背景：' + D.seasons[s].scene), s);
+    assert.ok(p.includes('人物の後ろ（左側）の背景：' + D.seasons[s].backdrops[0].scene), s);
     assert.ok(p.includes(`ひと目で${D.seasons[s].label}だと分かる景色`), s);
     assert.ok(p.includes('時間帯は昼') && D.seasons[s].light.includes('昼'), s);
-    assert.ok(!/夕方のような|夜の|街の灯り|イルミネーション/.test(D.seasons[s].scene + D.seasons[s].light), s);
+    assert.ok(!/夕方|夜|街の灯り|イルミネーション|夕日/.test(D.seasons[s].backdrops.map((b) => b.scene + b.decor).join('') + D.seasons[s].light), s);
   }
 });
 
@@ -244,4 +244,21 @@ test('ブログのタイトル案は「池袋」の位置がばらける（「�
       assert.equal(new Set(c.map((t) => t.slice(-3))).size, 3, `終わり方が重なっている：${c.join('/')}`);
     }
   }
+});
+
+test('背景のテイスト：各季節に5種類（暖かめ・鮮やか・クール・爽やか を含む）。選んだ背景がプロンプトに入る', () => {
+  const texts = { category: '池袋 メンズカラー', catch: 'a', title: 'b', subtitle: 'c' };
+  for (const s of SEASONS) {
+    const list = D.seasons[s].backdrops;
+    assert.equal(list.length, 5, s);
+    for (const label of ['暖かめ', '鮮やか', 'クール', '爽やか']) assert.ok(list.some((b) => b.label === label), `${s}/${label}`);
+    assert.equal(new Set(list.map((b) => b.scene)).size, 5, s);
+    for (const b of list) {
+      const p = E.buildPrompt(D, { ...base, season: s, backdrop: b.id }, texts, null);
+      assert.ok(p.includes(b.scene) && p.includes(b.decor) && p.includes(`背景のテイスト：${b.label}`), `${s}/${b.id}`);
+    }
+    // 見つからない id のときは1つ目
+    assert.equal(E.findBackdrop(D, { season: s, backdrop: 'none' }), list[0]);
+  }
+  assert.ok(!D.seasons.autumn.backdrops.slice(1).some((b) => /紅葉|楓|もみじ/.test(b.scene)), '秋の紅葉以外の背景に紅葉が入っている');
 });
