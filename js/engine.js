@@ -324,14 +324,26 @@
     const T = cleanTitleText(texts.title);
     const genre = cleanTitleText(g.id === 'custom' ? (state.customLabel || '') : (sub && sub.category) || g.label);
     const area = b.titleWord;
+    // 「池袋で〜」の形。施術ごとの悩みに寄りそう言い方にする（効果を保証する言い方は使わない）
+    const worries = {
+      color: ['髪色にお困りの', '髪色を変えたい', '垢抜けたい', '派手すぎない髪色を探す'],
+      perm: ['パーマにお悩みの', '朝のセットを楽にしたい', '髪に動きがほしい', '初めてパーマをかけたい'],
+      cut: ['髪型にお困りの', '垢抜けたい', '清潔感を出したい', '髪型を変えたい'],
+      straight: ['くせ毛にお悩みの', 'うねりが気になる', '朝のセットを楽にしたい', '髪のまとまりがほしい'],
+      custom: ['髪型にお困りの', '垢抜けたい', '清潔感を出したい']
+    }[g.group] || [];
     const patterns = [
-      `${area}で人気の${T}`, `${season}に似合う${T}なら${area}`, `${area}で叶える${season}の${T}`,
-      `大人の${T}なら${area}`, `${area}で${season}らしい${T}に`, `${area}で${season}の${T}を楽しむ`,
-      `${area}の${genre}で${T}`, `${area}で始める${T}`, `${area}発${season}の${T}`
+      ...worries.map((w) => `${area}で${w}メンズ必見`),
+      ...worries.map((w) => `${area}で${w}メンズへ${T}`),
+      `${area}で${T}にしたいメンズへ`, `${area}で${T}を試したいメンズ必見`,
+      `${area}で${season}の${T}を楽しむ`, `${area}で叶える${season}の${T}`
     ];
     const ok = uniq(patterns.map(cleanTitleText)).filter((t) => checkBlogTitle(settings, t).length === 0);
     const rand = rng(hashStr([state.season, g.id, sub ? sub.id : '', T, round || 0].join('|')));
-    const list = shuffled(ok, rand);
+    const mixed = shuffled(ok, rand);
+    // 1つ目は「〜メンズ必見」の形にする
+    const first = mixed.find((t) => t.endsWith('必見'));
+    const list = first ? [first, ...mixed.filter((t) => t !== first)] : mixed;
     if (!list.length) list.push(cleanTitleText(`${area}${T}`).slice(0, b.titleMax));
     return list.slice(0, count);
   }
